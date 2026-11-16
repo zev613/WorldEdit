@@ -75,6 +75,7 @@ import com.sk89q.worldedit.extension.input.ParserContext;
 import com.sk89q.worldedit.world.RegenOptions;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockState;
+import com.sk89q.worldedit.world.block.BlockType;
 import com.sk89q.worldedit.world.block.BlockTypes;
 import com.sk89q.worldedit.world.generation.TreeType;
 import org.enginehub.piston.annotation.Command;
@@ -517,6 +518,128 @@ public class RegionCommands {
 
         actor.printInfo(TextComponent.of(totalChanges + " blocks changed."));
         return totalChanges;
+    }
+
+    @Command(
+        name = "/weather",
+        desc = "Simulates aging, weathering, and patina on blocks in the selection"
+    )
+    @CommandPermissions("worldedit.region.weather")
+    @Logging(REGION)
+    public int weather(Actor actor, EditSession editSession,
+                       @Selection Region region,
+                       @Arg(desc = "Severity of weathering (0.0 to 1.0)", def = "0.5")
+                           double severity,
+                       @Switch(name = 'm', desc = "Add moss to surfaces/materials")
+                           boolean moss,
+                       @Switch(name = 'c', desc = "Advance copper oxidation")
+                           boolean copper) throws WorldEditException {
+        checkCommandArgument(severity >= 0.0 && severity <= 1.0, "Severity must be between 0.0 and 1.0");
+        int changed = 0;
+
+        for (BlockVector3 pt : region) {
+            BlockState state = editSession.getBlock(pt);
+            BlockType type = state.getBlockType();
+            String id = type.id();
+            String targetId = null;
+
+            double roll = pseudoRandom(pt.x(), pt.y(), pt.z());
+
+            if (id.equals("minecraft:stone_bricks")) {
+                if (roll < severity * 0.35) {
+                    targetId = "minecraft:cracked_stone_bricks";
+                } else if (moss && roll < severity * 0.7) {
+                    targetId = "minecraft:mossy_stone_bricks";
+                }
+            } else if (id.equals("minecraft:deepslate_bricks") && roll < severity * 0.4) {
+                targetId = "minecraft:cracked_deepslate_bricks";
+            } else if (id.equals("minecraft:deepslate_tiles") && roll < severity * 0.4) {
+                targetId = "minecraft:cracked_deepslate_tiles";
+            } else if (id.equals("minecraft:polished_blackstone_bricks") && roll < severity * 0.4) {
+                targetId = "minecraft:cracked_polished_blackstone_bricks";
+            } else if (moss) {
+                if (id.equals("minecraft:cobblestone") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_cobblestone";
+                } else if (id.equals("minecraft:cobblestone_stairs") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_cobblestone_stairs";
+                } else if (id.equals("minecraft:cobblestone_slab") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_cobblestone_slab";
+                } else if (id.equals("minecraft:cobblestone_wall") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_cobblestone_wall";
+                } else if (id.equals("minecraft:stone_brick_stairs") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_stone_brick_stairs";
+                } else if (id.equals("minecraft:stone_brick_slab") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_stone_brick_slab";
+                } else if (id.equals("minecraft:stone_brick_wall") && roll < severity * 0.5) {
+                    targetId = "minecraft:mossy_stone_brick_wall";
+                }
+            }
+
+            if (copper || targetId == null) {
+                if (id.contains("copper") && !id.contains("waxed")) {
+                    String[] stages = { "", "exposed_", "weathered_", "oxidized_" };
+                    for (int s = 0; s < stages.length - 1; s++) {
+                        String currentPrefix = "minecraft:" + stages[s];
+                        String nextPrefix = "minecraft:" + stages[s + 1];
+                        if (stages[s].isEmpty()) {
+                            if (id.equals("minecraft:copper_block") && roll < severity) {
+                                targetId = "minecraft:exposed_copper";
+                                break;
+                            } else if (id.startsWith("minecraft:cut_copper") && roll < severity) {
+                                targetId = id.replace("minecraft:cut_copper", "minecraft:exposed_cut_copper");
+                                break;
+                            } else if (id.startsWith("minecraft:copper_") && roll < severity) {
+                                targetId = id.replace("minecraft:copper_", "minecraft:exposed_copper_");
+                                break;
+                            }
+                        } else if (id.startsWith(currentPrefix) && roll < severity) {
+                            targetId = id.replace(currentPrefix, nextPrefix);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (targetId != null) {
+                BlockType targetType = BlockTypes.get(targetId);
+                if (targetType != null) {
+                    BlockState newState = transferBlockProperties(state, targetType);
+                    if (editSession.setBlock(pt, newState)) {
+                        changed++;
+                    }
+                }
+            }
+        }
+
+        actor.printInfo(TextComponent.of(changed + " blocks weathered."));
+        return changed;
+    }
+
+    private static BlockState transferBlockProperties(BlockState original, BlockType newType) {
+        BlockState result = newType.getDefaultState();
+        for (com.sk89q.worldedit.registry.state.Property<?> prop : original.getStates().keySet()) {
+            com.sk89q.worldedit.registry.state.Property<?> targetProp = newType.getProperty(prop.name());
+            if (targetProp != null) {
+                result = applyPropertyUnchecked(result, targetProp, original.getState(prop));
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <V> BlockState applyPropertyUnchecked(BlockState state, com.sk89q.worldedit.registry.state.Property<V> prop, Object value) {
+        try {
+            return state.with(prop, (V) value);
+        } catch (Exception expected) {
+            // Property not compatible with target block state, return original
+            return state;
+        }
+    }
+
+    private static double pseudoRandom(int x, int y, int z) {
+        int h = x * 374761393 + y * 668265263 + z * 326648991;
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) & 0x7fffffff) / (double) 0x7fffffff;
     }
 
     @Command(
