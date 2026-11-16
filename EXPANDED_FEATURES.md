@@ -2,9 +2,9 @@ WorldEdit Expanded
 ==================
 
 This fork adds extra commands, patterns and masks on top of upstream WorldEdit.
-Everything lives in `worldedit-core`, so it works on every platform (Fabric, NeoForge, Bukkit/Paper, Sponge).
+Everything lives in `worldedit-core`, so it works on every platform. NeoForge is the primary target (Fabric, Bukkit/Paper and Sponge also work).
 
-## Running it
+## Running it (NeoForge, Minecraft 26.3)
 
 You need **JDK 25** installed (e.g. [Adoptium Temurin 25](https://adoptium.net/)). Check with `java -version`.
 The first build downloads Gradle, Minecraft and all dependencies, so expect it to take several minutes.
@@ -13,28 +13,28 @@ The first build downloads Gradle, Minecraft and all dependencies, so expect it t
 
 ```sh
 # macOS / Linux
-./gradlew :worldedit-fabric:runClient
+./gradlew :worldedit-neoforge:runClient
 
 # Windows
-gradlew.bat :worldedit-fabric:runClient
+gradlew.bat :worldedit-neoforge:runClient
 ```
 
-This starts Minecraft with Fabric and this WorldEdit already loaded, using an offline dev account.
+This starts Minecraft 26.3 with NeoForge and this WorldEdit already loaded, using an offline dev account.
 Create a creative world with cheats enabled and use the commands below.
-`:worldedit-fabric:runServer` starts a dedicated server instead (accept the EULA in `worldedit-fabric/run/eula.txt` first).
-NeoForge works the same way: `./gradlew :worldedit-neoforge:runClient`.
+`:worldedit-neoforge:runServer` starts a dedicated server instead (accept the EULA in `worldedit-neoforge/run/eula.txt` first).
 
 ### Option B: build a jar and install it in your normal game
 
 ```sh
-./gradlew :worldedit-fabric:build
+./gradlew :worldedit-neoforge:build
 ```
 
-Copy `worldedit-fabric/build/libs/worldedit-fabric-mc<mc version>-<version>-dist.jar` into your `.minecraft/mods` folder.
-You need a Fabric install for the matching Minecraft version (see `fabric-minecraft` in `gradle/libs.versions.toml`)
-plus the Fabric API mod. Remove any other WorldEdit jar first.
+Copy `worldedit-neoforge/build/libs/worldedit-neoforge-mc26.3-<version>-dist.jar` into the `mods` folder of a
+NeoForge 26.3 install (the NeoForge version this was built against is `neoforge` in `gradle/libs.versions.toml`).
+Remove any other WorldEdit jar first. Use the `-dist` jar, not `-dist-slim` (an intermediate jar missing the embedded jar-in-jar dependencies).
 
-Other platforms: `./gradlew build` builds everything. The jars end up in `worldedit-<platform>/build/libs`. Use the `-dist` jar.
+Other platforms work the same way, e.g. `./gradlew :worldedit-fabric:runClient` for Fabric.
+`./gradlew build` builds everything, with jars in `worldedit-<platform>/build/libs`.
 
 ## New commands
 
