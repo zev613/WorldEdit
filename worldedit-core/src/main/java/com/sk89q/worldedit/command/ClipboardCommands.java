@@ -95,7 +95,9 @@ public class ClipboardCommands {
                      @Switch(name = 'b', desc = "Also copy biomes")
                          boolean copyBiomes,
                      @ArgFlag(name = 'm', desc = "Set the include mask, non-matching blocks become air")
-                         Mask mask) throws WorldEditException {
+                         Mask mask,
+                     @ArgFlag(name = 'k', desc = "Store in named clipboard", def = "")
+                         String clipName) throws WorldEditException {
         checkRegionBounds(region, session);
         BlockArrayClipboard clipboard = new BlockArrayClipboard(region);
         clipboard.setOrigin(session.getPlacementPosition(actor));
@@ -107,6 +109,10 @@ public class ClipboardCommands {
         }
         Operations.completeLegacy(copy);
         session.setClipboard(new ClipboardHolder(clipboard));
+        if (clipName != null && !clipName.isEmpty()) {
+            session.setNamedClipboard(clipName, new ClipboardHolder(clipboard));
+            actor.printInfo(TextComponent.of("Clipboard also saved as '" + clipName + "'."));
+        }
 
         copy.getStatusMessages().forEach(actor::print);
     }
@@ -167,9 +173,13 @@ public class ClipboardCommands {
                           boolean pasteBiomes,
                       @ArgFlag(name = 'm', desc = "Only paste blocks matching this mask")
                       @ClipboardMask
-                          Mask sourceMask) throws WorldEditException {
+                          Mask sourceMask,
+                      @ArgFlag(name = 'k', desc = "Paste from named clipboard", def = "")
+                          String clipName) throws WorldEditException {
 
-        ClipboardHolder holder = session.getClipboard();
+        ClipboardHolder holder = (clipName != null && !clipName.isEmpty())
+                ? session.getNamedClipboard(clipName)
+                : session.getClipboard();
         Clipboard clipboard = holder.getClipboard();
         Region region = clipboard.getRegion();
         List<Component> messages = Lists.newArrayList();
@@ -210,6 +220,42 @@ public class ClipboardCommands {
             actor.printInfo(TranslatableComponent.of("worldedit.paste.pasted", TextComponent.of(to.toString())));
         }
         messages.forEach(actor::print);
+    }
+
+    @Command(
+        name = "/clipboards",
+        aliases = { "/clips" },
+        desc = "Manage named clipboards in the current session"
+    )
+    @CommandPermissions("worldedit.clipboard.list")
+    public void listClipboards(Actor actor, LocalSession session,
+                               @Arg(desc = "Action: list, save, or load", def = "list")
+                                   String action,
+                               @Arg(desc = "Name of the clipboard", def = "")
+                                   String name) throws WorldEditException {
+        String act = action.toLowerCase(java.util.Locale.ROOT);
+        switch (act) {
+            case "save" -> {
+                checkCommandArgument(!name.isEmpty(), "Please specify a clipboard name to save to: //clipboards save <name>");
+                ClipboardHolder holder = session.getClipboard();
+                session.setNamedClipboard(name, holder);
+                actor.printInfo(TextComponent.of("Current clipboard saved as '" + name + "'."));
+            }
+            case "load" -> {
+                checkCommandArgument(!name.isEmpty(), "Please specify a clipboard name to load: //clipboards load <name>");
+                ClipboardHolder holder = session.getNamedClipboard(name);
+                session.setClipboard(holder);
+                actor.printInfo(TextComponent.of("Clipboard '" + name + "' loaded as active clipboard."));
+            }
+            default -> {
+                var map = session.getNamedClipboards();
+                if (map.isEmpty()) {
+                    actor.printInfo(TextComponent.of("No named clipboards saved in this session."));
+                } else {
+                    actor.printInfo(TextComponent.of("Saved clipboards (" + map.size() + "): " + String.join(", ", map.keySet())));
+                }
+            }
+        }
     }
 
     @Command(

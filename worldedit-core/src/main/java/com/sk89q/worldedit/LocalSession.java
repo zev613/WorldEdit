@@ -102,6 +102,7 @@ public class LocalSession {
     private final transient ArrayDeque<EditSession> history = new ArrayDeque<>();
     private transient int historyPointer = 0;
     private transient ClipboardHolder clipboard;
+    private final transient java.util.Map<String, ClipboardHolder> namedClipboards = new java.util.concurrent.ConcurrentHashMap<>();
     private transient boolean superPickaxe = false;
     private transient BlockTool pickaxeMode = new SinglePickaxe();
     private final transient Map<ItemType, Tool> tools = new HashMap<>();
@@ -467,6 +468,45 @@ public class LocalSession {
      */
     public void setClipboard(@Nullable ClipboardHolder clipboard) {
         this.clipboard = clipboard;
+    }
+
+    /**
+     * Gets all named clipboards in this session.
+     *
+     * @return unmodifiable map of named clipboards
+     */
+    public java.util.Map<String, ClipboardHolder> getNamedClipboards() {
+        return java.util.Collections.unmodifiableMap(namedClipboards);
+    }
+
+    /**
+     * Gets a named clipboard by its identifier.
+     *
+     * @param name name of the clipboard
+     * @return the clipboard holder
+     * @throws EmptyClipboardException if not found
+     */
+    public ClipboardHolder getNamedClipboard(String name) throws EmptyClipboardException {
+        ClipboardHolder holder = namedClipboards.get(name.toLowerCase(java.util.Locale.ROOT));
+        if (holder == null) {
+            throw new EmptyClipboardException();
+        }
+        return holder;
+    }
+
+    /**
+     * Stores or removes a named clipboard.
+     *
+     * @param name name of the clipboard
+     * @param holder the clipboard holder, or null to remove
+     */
+    public void setNamedClipboard(String name, @Nullable ClipboardHolder holder) {
+        String key = name.toLowerCase(java.util.Locale.ROOT);
+        if (holder == null) {
+            namedClipboards.remove(key);
+        } else {
+            namedClipboards.put(key, holder);
+        }
     }
 
     /**

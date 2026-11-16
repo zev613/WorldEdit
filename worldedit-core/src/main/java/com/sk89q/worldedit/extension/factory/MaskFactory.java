@@ -22,6 +22,7 @@ package com.sk89q.worldedit.extension.factory;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.factory.parser.mask.AirMaskParser;
 import com.sk89q.worldedit.extension.factory.parser.mask.BiomeMaskParser;
+import com.sk89q.worldedit.extension.factory.parser.mask.AdjacentMaskParser;
 import com.sk89q.worldedit.extension.factory.parser.mask.BlockCategoryMaskParser;
 import com.sk89q.worldedit.extension.factory.parser.mask.BlockStateMaskParser;
 import com.sk89q.worldedit.extension.factory.parser.mask.BlocksMaskParser;
@@ -85,6 +86,7 @@ public final class MaskFactory extends AbstractFactory<Mask> {
         register(new BlockCategoryMaskParser(worldEdit));
         register(new BiomeMaskParser(worldEdit));
         register(new SlopeMaskParser(worldEdit));
+        register(new AdjacentMaskParser(worldEdit));
     }
 
     @Override

@@ -19,7 +19,7 @@
 
 package com.sk89q.worldedit.extension.factory.parser.mask;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.input.InputParseException;
 import com.sk89q.worldedit.extension.input.ParserContext;
@@ -27,27 +27,73 @@ import com.sk89q.worldedit.function.mask.ExistingBlockMask;
 import com.sk89q.worldedit.function.mask.Mask;
 import com.sk89q.worldedit.function.mask.Masks;
 import com.sk89q.worldedit.function.mask.OffsetsMask;
-import com.sk89q.worldedit.internal.registry.SimpleInputParser;
+import com.sk89q.worldedit.internal.registry.InputParser;
+import com.sk89q.worldedit.math.BlockVector3;
 
-import java.util.List;
+import java.util.Locale;
+import java.util.stream.Stream;
 
-public class ExposedMaskParser extends SimpleInputParser<Mask> {
-
-    private final List<String> aliases = ImmutableList.of("#exposed", "#surface");
+/**
+ * Parser for {@code #exposed}, {@code #surface}, or {@code #exposed[dir]} (e.g. up, down, north, south, east, west).
+ */
+public class ExposedMaskParser extends InputParser<Mask> {
 
     public ExposedMaskParser(WorldEdit worldEdit) {
         super(worldEdit);
     }
 
     @Override
-    public List<String> getMatchedAliases() {
-        return this.aliases;
+    public Stream<String> getSuggestions(String input, ParserContext context) {
+        if (input.isEmpty() || "#".startsWith(input)) {
+            return Stream.of("#exposed", "#surface");
+        }
+        String lower = input.toLowerCase(Locale.ROOT);
+        if ("#exposed".startsWith(lower) || "#surface".startsWith(lower)) {
+            return Stream.of("#exposed", "#exposed[up]", "#exposed[down]", "#exposed[north]", "#exposed[south]", "#exposed[east]", "#exposed[west]", "#surface");
+        }
+        if (lower.startsWith("#exposed[") || lower.startsWith("#surface[")) {
+            return Stream.of("#exposed[up]", "#exposed[down]", "#exposed[north]", "#exposed[south]", "#exposed[east]", "#exposed[west]", "#exposed[horizontal]")
+                .filter(s -> s.startsWith(lower));
+        }
+        return Stream.empty();
     }
 
     @Override
-    public Mask parseFromSimpleInput(String input, ParserContext context) throws InputParseException {
-        return OffsetsMask.builder(Masks.negate(new ExistingBlockMask(context.requireExtent())))
-            .excludeSelf(true)
-            .build();
+    public Mask parseFromInput(String input, ParserContext context) throws InputParseException {
+        String lower = input.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("#exposed") && !lower.startsWith("#surface")) {
+            return null;
+        }
+
+        Mask airMask = Masks.negate(new ExistingBlockMask(context.requireExtent()));
+        if (lower.equals("#exposed") || lower.equals("#surface")) {
+            return OffsetsMask.builder(airMask).excludeSelf(true).build();
+        }
+
+        int open = input.indexOf('[');
+        int close = input.lastIndexOf(']');
+        if (open < 0 || close <= open) {
+            return OffsetsMask.builder(airMask).excludeSelf(true).build();
+        }
+
+        String dirStr = input.substring(open + 1, close).trim().toLowerCase(Locale.ROOT);
+        return switch (dirStr) {
+            case "up", "top", "sky" -> OffsetsMask.single(airMask, BlockVector3.at(0, 1, 0));
+            case "down", "bottom", "floor" -> OffsetsMask.single(airMask, BlockVector3.at(0, -1, 0));
+            case "north" -> OffsetsMask.single(airMask, BlockVector3.at(0, 0, -1));
+            case "south" -> OffsetsMask.single(airMask, BlockVector3.at(0, 0, 1));
+            case "east" -> OffsetsMask.single(airMask, BlockVector3.at(1, 0, 0));
+            case "west" -> OffsetsMask.single(airMask, BlockVector3.at(-1, 0, 0));
+            case "horizontal", "sides" -> OffsetsMask.builder(airMask)
+                .offsets(ImmutableSet.of(
+                    BlockVector3.at(0, 0, -1),
+                    BlockVector3.at(0, 0, 1),
+                    BlockVector3.at(1, 0, 0),
+                    BlockVector3.at(-1, 0, 0)
+                ))
+                .excludeSelf(true)
+                .build();
+            default -> OffsetsMask.builder(airMask).excludeSelf(true).build();
+        };
     }
 }

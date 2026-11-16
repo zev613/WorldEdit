@@ -677,6 +677,68 @@ public class SelectionCommands {
     }
 
     @Command(
+        name = "/measure",
+        aliases = { "/dist", "/distance" },
+        desc = "Measure distance, dimensions, angle, and volume of the selection or between points"
+    )
+    @CommandPermissions("worldedit.selection.size")
+    public void measure(Actor actor, World world, LocalSession session,
+                        @Arg(desc = "Optional second point to measure from selection pos1", def = "")
+                            BlockVector3 targetPos) throws WorldEditException {
+        Region region = session.getSelection(world);
+        BlockVector3 pos1;
+        BlockVector3 pos2;
+
+        if (targetPos != null) {
+            pos1 = region.getMinimumPoint();
+            pos2 = targetPos;
+        } else {
+            pos1 = region.getMinimumPoint();
+            pos2 = region.getMaximumPoint();
+        }
+
+        int dx = Math.abs(pos2.x() - pos1.x()) + (targetPos == null ? 1 : 0);
+        int dy = Math.abs(pos2.y() - pos1.y()) + (targetPos == null ? 1 : 0);
+        int dz = Math.abs(pos2.z() - pos1.z()) + (targetPos == null ? 1 : 0);
+
+        double diffX = pos2.x() - pos1.x();
+        double diffY = pos2.y() - pos1.y();
+        double diffZ = pos2.z() - pos1.z();
+
+        double euclideanDist = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
+        double horizontalDist = Math.hypot(diffX, diffZ);
+        int manhattanDist = (int) (Math.abs(diffX) + Math.abs(diffY) + Math.abs(diffZ));
+
+        double yaw = Math.toDegrees(Math.atan2(-diffX, diffZ));
+        double pitch = Math.toDegrees(Math.atan2(-diffY, horizontalDist));
+
+        long volume = (long) dx * dy * dz;
+        long surfaceArea = 2L * ((long) dx * dy + (long) dy * dz + (long) dx * dz);
+
+        actor.printInfo(TextComponent.of("--- WorldEdit Measurement ---"));
+        actor.printInfo(TextComponent.of(String.format(
+            "Points: (%d, %d, %d) to (%d, %d, %d)",
+            pos1.x(), pos1.y(), pos1.z(), pos2.x(), pos2.y(), pos2.z()
+        )));
+        actor.printInfo(TextComponent.of(String.format(
+            "Delta: dx=%d, dy=%d, dz=%d (Dimensions: %dx%dx%d)",
+            (int) diffX, (int) diffY, (int) diffZ, dx, dy, dz
+        )));
+        actor.printInfo(TextComponent.of(String.format(
+            "Distance: Euclidean=%.3f, Horizontal=%.3f, Manhattan=%d",
+            euclideanDist, horizontalDist, manhattanDist
+        )));
+        actor.printInfo(TextComponent.of(String.format(
+            "Angles: Yaw=%.1f\u00b0, Pitch=%.1f\u00b0",
+            yaw, pitch
+        )));
+        actor.printInfo(TextComponent.of(String.format(
+            "Bounding: Volume=%d blocks, Surface Area=%d blocks\u00b2",
+            volume, surfaceArea
+        )));
+    }
+
+    @Command(
         name = "/count",
         desc = "Counts the number of blocks matching a mask"
     )
