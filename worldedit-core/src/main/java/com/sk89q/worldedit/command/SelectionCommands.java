@@ -690,7 +690,7 @@ public class SelectionCommands {
         BlockVector3 pos2;
 
         if (targetPos != null) {
-            pos1 = region.getMinimumPoint();
+            pos1 = session.getRegionSelector(world).getPrimaryPosition();
             pos2 = targetPos;
         } else {
             pos1 = region.getMinimumPoint();
@@ -729,11 +729,11 @@ public class SelectionCommands {
             euclideanDist, horizontalDist, manhattanDist
         )));
         actor.printInfo(TextComponent.of(String.format(
-            "Angles: Yaw=%.1f\u00b0, Pitch=%.1f\u00b0",
+            "Angles: Yaw=%.1f°, Pitch=%.1f°",
             yaw, pitch
         )));
         actor.printInfo(TextComponent.of(String.format(
-            "Bounding: Volume=%d blocks, Surface Area=%d blocks\u00b2",
+            "Bounding: Volume=%d blocks, Surface Area=%d blocks²",
             volume, surfaceArea
         )));
     }

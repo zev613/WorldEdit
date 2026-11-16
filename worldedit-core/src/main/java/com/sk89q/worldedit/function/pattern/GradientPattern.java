@@ -82,6 +82,6 @@ public class GradientPattern extends AbstractPattern {
     private static double pseudoRandom(int x, int y, int z) {
         int h = x * 374761393 + y * 668265263 + z * 326648991;
         h = (h ^ (h >>> 13)) * 1274126177;
-        return ((h ^ (h >>> 16)) & 0x7fffffff) / (double) 0x7fffffff;
+        return ((h ^ (h >>> 16)) & 0x7FFFFFFF) / (double) 0x7FFFFFFF;
     }
 }

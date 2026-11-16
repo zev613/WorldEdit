@@ -19,8 +19,10 @@
 
 package com.sk89q.worldedit.command;
 
+import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.sk89q.util.StringUtil;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.WorldEdit;
@@ -29,6 +31,7 @@ import com.sk89q.worldedit.command.util.CommandPermissions;
 import com.sk89q.worldedit.command.util.CommandPermissionsConditionGenerator;
 import com.sk89q.worldedit.command.util.Logging;
 import com.sk89q.worldedit.entity.Player;
+import com.sk89q.worldedit.extension.input.ParserContext;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.extent.InputExtent;
@@ -71,7 +74,6 @@ import com.sk89q.worldedit.util.formatting.component.TextUtils;
 import com.sk89q.worldedit.util.formatting.text.Component;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.formatting.text.TranslatableComponent;
-import com.sk89q.worldedit.extension.input.ParserContext;
 import com.sk89q.worldedit.world.RegenOptions;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockState;
@@ -392,7 +394,7 @@ public class RegionCommands {
                           double noiseFactor) throws WorldEditException {
         checkCommandArgument(layerThickness > 0, "Layer thickness must be > 0");
 
-        Iterable<String> rawPatterns = com.google.common.base.Splitter.on(',').split(patternListStr);
+        Iterable<String> rawPatterns = StringUtil.splitOutsideBrackets(patternListStr, CharMatcher.is(','));
         List<Pattern> patterns = new ArrayList<>();
         ParserContext context = new ParserContext();
         context.setActor(actor);
@@ -431,79 +433,101 @@ public class RegionCommands {
 
     @Command(
         name = "/erode",
-        desc = "Simulates terrain erosion (thermal talus rockfall) over the selection"
+        desc = "Simulates thermal terrain erosion (talus/rockfall) over the selection",
+        descFooter = "Blocks on top of steep (2+ block) drops slide down onto the lowest neighboring column"
     )
     @CommandPermissions("worldedit.region.erode")
     @Logging(REGION)
     public int erode(Actor actor, EditSession editSession,
                      @Selection Region region,
-                     @Arg(desc = "Erosion mode: thermal (talus/rockfall)", def = "thermal")
-                         String mode,
-                     @Arg(desc = "Number of iterations to perform", def = "1")
+                     @Arg(desc = "Number of iterations to perform (1-50)", def = "1")
                          int iterations) throws WorldEditException {
-        checkCommandArgument(iterations > 0, "Iterations must be > 0");
+        checkCommandArgument(iterations > 0 && iterations <= 50, "Iterations must be between 1 and 50");
         int totalChanges = 0;
 
-        int minX = region.getMinimumPoint().x();
-        int maxX = region.getMaximumPoint().x();
-        int minY = region.getMinimumPoint().y();
-        int maxY = region.getMaximumPoint().y();
-        int minZ = region.getMinimumPoint().z();
-        int maxZ = region.getMaximumPoint().z();
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+        int minX = min.x();
+        int minY = min.y();
+        int minZ = min.z();
+        int sizeX = max.x() - minX + 1;
+        int sizeZ = max.z() - minZ + 1;
+        int[][] offsets = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
 
-        for (int iter = 0; iter < Math.min(iterations, 10); iter++) {
-            List<BlockVector3> toRemove = new ArrayList<>();
-            List<BlockVector3> toAdd = new ArrayList<>();
-            List<BlockState> addedStates = new ArrayList<>();
-
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    int topY = Integer.MIN_VALUE;
-                    BlockState topState = null;
-                    for (int y = maxY; y >= minY; y--) {
-                        BlockVector3 pt = BlockVector3.at(x, y, z);
-                        if (!region.contains(pt)) continue;
+        for (int iter = 0; iter < iterations; iter++) {
+            // Height map of the topmost solid block per column (only blocks inside the region count).
+            // NO_COLUMN = column not part of the region at all, minY - 1 = column in region but empty.
+            final int noColumn = Integer.MIN_VALUE;
+            int[][] heights = new int[sizeX][sizeZ];
+            BlockState[][] tops = new BlockState[sizeX][sizeZ];
+            for (int dx = 0; dx < sizeX; dx++) {
+                for (int dz = 0; dz < sizeZ; dz++) {
+                    heights[dx][dz] = noColumn;
+                    for (int y = max.y(); y >= minY; y--) {
+                        BlockVector3 pt = BlockVector3.at(minX + dx, y, minZ + dz);
+                        if (!region.contains(pt)) {
+                            continue;
+                        }
+                        if (heights[dx][dz] == noColumn) {
+                            heights[dx][dz] = minY - 1;
+                        }
                         BlockState state = editSession.getBlock(pt);
                         if (state.getBlockType().getMaterial().isSolid()) {
-                            topY = y;
-                            topState = state;
+                            heights[dx][dz] = y;
+                            tops[dx][dz] = state;
                             break;
                         }
-                    }
-                    if (topY == Integer.MIN_VALUE) continue;
-
-                    int[][] offsets = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
-                    int lowestNeighborY = topY;
-                    int lowestNx = x;
-                    int lowestNz = z;
-
-                    for (int[] off : offsets) {
-                        int nx = x + off[0];
-                        int nz = z + off[1];
-                        int nTopY = minY - 1;
-                        for (int y = maxY; y >= minY; y--) {
-                            BlockVector3 npt = BlockVector3.at(nx, y, nz);
-                            if (!region.contains(npt)) continue;
-                            if (editSession.getBlock(npt).getBlockType().getMaterial().isSolid()) {
-                                nTopY = y;
-                                break;
-                            }
-                        }
-                        if (nTopY < lowestNeighborY) {
-                            lowestNeighborY = nTopY;
-                            lowestNx = nx;
-                            lowestNz = nz;
-                        }
-                    }
-
-                    if (topY - lowestNeighborY >= 2 && lowestNeighborY >= minY) {
-                        toRemove.add(BlockVector3.at(x, topY, z));
-                        toAdd.add(BlockVector3.at(lowestNx, lowestNeighborY + 1, lowestNz));
-                        addedStates.add(topState);
                     }
                 }
             }
 
+            // A column may only give or receive one block per iteration, otherwise a column that
+            // both loses its top and receives a block would end up with a floating block.
+            boolean[][] touched = new boolean[sizeX][sizeZ];
+            List<BlockVector3> toRemove = new ArrayList<>();
+            List<BlockVector3> toAdd = new ArrayList<>();
+            List<BlockState> addedStates = new ArrayList<>();
+
+            for (int dx = 0; dx < sizeX; dx++) {
+                for (int dz = 0; dz < sizeZ; dz++) {
+                    int topY = heights[dx][dz];
+                    if (topY == noColumn || tops[dx][dz] == null || touched[dx][dz]) {
+                        continue;
+                    }
+                    int lowestY = topY;
+                    int lowestDx = -1;
+                    int lowestDz = -1;
+                    for (int[] off : offsets) {
+                        int ndx = dx + off[0];
+                        int ndz = dz + off[1];
+                        if (ndx < 0 || ndz < 0 || ndx >= sizeX || ndz >= sizeZ
+                            || heights[ndx][ndz] == noColumn || touched[ndx][ndz]) {
+                            continue;
+                        }
+                        if (heights[ndx][ndz] < lowestY) {
+                            lowestY = heights[ndx][ndz];
+                            lowestDx = ndx;
+                            lowestDz = ndz;
+                        }
+                    }
+                    if (lowestDx < 0 || topY - lowestY < 2) {
+                        continue;
+                    }
+                    BlockVector3 target = BlockVector3.at(minX + lowestDx, lowestY + 1, minZ + lowestDz);
+                    if (!region.contains(target)) {
+                        continue;
+                    }
+                    touched[dx][dz] = true;
+                    touched[lowestDx][lowestDz] = true;
+                    toRemove.add(BlockVector3.at(minX + dx, topY, minZ + dz));
+                    toAdd.add(target);
+                    addedStates.add(tops[dx][dz]);
+                }
+            }
+
+            if (toRemove.isEmpty()) {
+                break;
+            }
             for (BlockVector3 rem : toRemove) {
                 if (editSession.setBlock(rem, BlockTypes.AIR.getDefaultState())) {
                     totalChanges++;
@@ -575,28 +599,18 @@ public class RegionCommands {
                 }
             }
 
-            if (copper || targetId == null) {
-                if (id.contains("copper") && !id.contains("waxed")) {
-                    String[] stages = { "", "exposed_", "weathered_", "oxidized_" };
-                    for (int s = 0; s < stages.length - 1; s++) {
-                        String currentPrefix = "minecraft:" + stages[s];
-                        String nextPrefix = "minecraft:" + stages[s + 1];
-                        if (stages[s].isEmpty()) {
-                            if (id.equals("minecraft:copper_block") && roll < severity) {
-                                targetId = "minecraft:exposed_copper";
-                                break;
-                            } else if (id.startsWith("minecraft:cut_copper") && roll < severity) {
-                                targetId = id.replace("minecraft:cut_copper", "minecraft:exposed_cut_copper");
-                                break;
-                            } else if (id.startsWith("minecraft:copper_") && roll < severity) {
-                                targetId = id.replace("minecraft:copper_", "minecraft:exposed_copper_");
-                                break;
-                            }
-                        } else if (id.startsWith(currentPrefix) && roll < severity) {
-                            targetId = id.replace(currentPrefix, nextPrefix);
-                            break;
-                        }
-                    }
+            if (copper && targetId == null && roll < severity
+                && id.startsWith("minecraft:") && id.contains("copper") && !id.contains("waxed")) {
+                // Advance one oxidation stage. Targets that do not exist (e.g. copper_ore) are skipped below.
+                String path = id.substring("minecraft:".length());
+                if (path.startsWith("exposed_")) {
+                    targetId = "minecraft:weathered_" + path.substring("exposed_".length());
+                } else if (path.startsWith("weathered_")) {
+                    targetId = "minecraft:oxidized_" + path.substring("weathered_".length());
+                } else if (path.equals("copper_block")) {
+                    targetId = "minecraft:exposed_copper";
+                } else if (!path.startsWith("oxidized_")) {
+                    targetId = "minecraft:exposed_" + path;
                 }
             }
 
@@ -630,7 +644,7 @@ public class RegionCommands {
     private static <V> BlockState applyPropertyUnchecked(BlockState state, com.sk89q.worldedit.registry.state.Property<V> prop, Object value) {
         try {
             return state.with(prop, (V) value);
-        } catch (Exception expected) {
+        } catch (Exception _) {
             // Property not compatible with target block state, return original
             return state;
         }
@@ -639,7 +653,7 @@ public class RegionCommands {
     private static double pseudoRandom(int x, int y, int z) {
         int h = x * 374761393 + y * 668265263 + z * 326648991;
         h = (h ^ (h >>> 13)) * 1274126177;
-        return ((h ^ (h >>> 16)) & 0x7fffffff) / (double) 0x7fffffff;
+        return ((h ^ (h >>> 16)) & 0x7FFFFFFF) / (double) 0x7FFFFFFF;
     }
 
     @Command(
@@ -810,7 +824,7 @@ public class RegionCommands {
             if (val != null) {
                 return state.with(prop, val);
             }
-        } catch (Exception expected) {
+        } catch (Exception _) {
             // Ignored if property value is invalid
         }
         return state;
@@ -1015,13 +1029,13 @@ public class RegionCommands {
     }
 
     private static int applyInsetFace(EditSession editSession, Pattern pattern,
-                                      int uMin, int uMax, int vMin, int vMax,
+                                      int minU, int maxU, int minV, int maxV,
                                       int fixedCoord, BlockVector3 inward, int depth, int planeType)
             throws WorldEditException {
         int count = 0;
         BlockType airType = com.sk89q.worldedit.world.block.BlockTypes.AIR;
-        for (int u = uMin; u <= uMax; u++) {
-            for (int v = vMin; v <= vMax; v++) {
+        for (int u = minU; u <= maxU; u++) {
+            for (int v = minV; v <= maxV; v++) {
                 BlockVector3 surfacePt = switch (planeType) {
                     case 0 -> BlockVector3.at(u, v, fixedCoord);
                     case 1 -> BlockVector3.at(fixedCoord, v, u);

@@ -90,7 +90,7 @@ public class VoronoiPattern extends AbstractPattern {
     }
 
     private static double hashToDouble(int x, int y, int z, int seed) {
-        int h = (cellHash(x + seed * 31, y - seed * 17, z + seed * 53) & 0x7fffffff);
-        return h / (double) 0x7fffffff;
+        int h = (cellHash(x + seed * 31, y - seed * 17, z + seed * 53) & 0x7FFFFFFF);
+        return h / (double) 0x7FFFFFFF;
     }
 }

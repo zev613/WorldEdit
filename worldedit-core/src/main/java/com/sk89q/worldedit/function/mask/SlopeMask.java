@@ -23,7 +23,6 @@ import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.world.block.BlockState;
 
-import javax.annotation.Nullable;
 
 /**
  * A mask that matches blocks based on their surface terrain slope in degrees.
