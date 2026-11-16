@@ -240,6 +240,116 @@ public class GenerationCommands {
     }
 
     @Command(
+        name = "/helix",
+        aliases = { "/spiral" },
+        desc = "Generates a 3D helix or spiral."
+    )
+    @CommandPermissions("worldedit.generation.helix")
+    @Logging(PLACEMENT)
+    public int helix(Actor actor, LocalSession session, EditSession editSession,
+                     @Arg(desc = "The pattern of blocks to generate")
+                         Pattern pattern,
+                     @Arg(desc = "The radii of the helix. 1st is N/S, 2nd is E/W")
+                     @Radii(2)
+                         List<Double> radii,
+                     @Arg(desc = "The height of the helix")
+                         int height,
+                     @Arg(desc = "The number of turns/revolutions", def = "1")
+                         double turns,
+                     @Arg(desc = "Thickness of the helix strand", def = "0")
+                         double thickness,
+                     @Switch(name = 'h', desc = "Generate only a shell")
+                         boolean shell) throws WorldEditException {
+        double radiusX;
+        double radiusZ;
+        switch (radii.size()) {
+            case 1 -> radiusX = radiusZ = Math.max(1, radii.get(0));
+            case 2 -> {
+                radiusX = Math.max(1, radii.get(0));
+                radiusZ = Math.max(1, radii.get(1));
+            }
+            default -> {
+                actor.printError(TextComponent.of("Invalid number of radii for helix"));
+                return 0;
+            }
+        }
+
+        worldEdit.checkMaxRadius(radiusX);
+        worldEdit.checkMaxRadius(radiusZ);
+        worldEdit.checkMaxRadius(thickness);
+
+        BlockVector3 pos = session.getPlacementPosition(actor);
+        int affected = editSession.makeHelix(pos, pattern, radiusX, radiusZ, height, turns, thickness, !shell);
+        actor.printInfo(TextComponent.of(affected + " blocks changed."));
+        return affected;
+    }
+
+    @Command(
+        name = "/hhelix",
+        aliases = { "/hspiral" },
+        desc = "Generates a hollow 3D helix or spiral."
+    )
+    @CommandPermissions("worldedit.generation.helix")
+    @Logging(PLACEMENT)
+    public int hhelix(Actor actor, LocalSession session, EditSession editSession,
+                      @Arg(desc = "The pattern of blocks to generate")
+                          Pattern pattern,
+                      @Arg(desc = "The radii of the helix. 1st is N/S, 2nd is E/W")
+                      @Radii(2)
+                          List<Double> radii,
+                      @Arg(desc = "The height of the helix")
+                          int height,
+                      @Arg(desc = "The number of turns/revolutions", def = "1")
+                          double turns,
+                      @Arg(desc = "Thickness of the helix strand", def = "1")
+                          double thickness) throws WorldEditException {
+        return helix(actor, session, editSession, pattern, radii, height, turns, thickness, true);
+    }
+
+    @Command(
+        name = "/torus",
+        aliases = { "/donut" },
+        desc = "Generates a 3D torus (donut shape)."
+    )
+    @CommandPermissions("worldedit.generation.torus")
+    @Logging(PLACEMENT)
+    public int torus(Actor actor, LocalSession session, EditSession editSession,
+                     @Arg(desc = "The pattern of blocks to generate")
+                         Pattern pattern,
+                     @Arg(desc = "The major radius (distance from center to tube center)")
+                         double majorRadius,
+                     @Arg(desc = "The minor radius (tube thickness)")
+                         double minorRadius,
+                     @Switch(name = 'h', desc = "Generate only a shell")
+                         boolean shell) throws WorldEditException {
+        checkCommandArgument(majorRadius > 0, "Major radius must be > 0");
+        checkCommandArgument(minorRadius > 0, "Minor radius must be > 0");
+        worldEdit.checkMaxRadius(majorRadius + minorRadius);
+
+        BlockVector3 pos = session.getPlacementPosition(actor);
+        int affected = editSession.makeTorus(pos, pattern, majorRadius, minorRadius, !shell);
+        actor.printInfo(TextComponent.of(affected + " blocks changed."));
+        return affected;
+    }
+
+    @Command(
+        name = "/htorus",
+        aliases = { "/hdonut" },
+        desc = "Generates a hollow 3D torus (donut shell)."
+    )
+    @CommandPermissions("worldedit.generation.torus")
+    @Logging(PLACEMENT)
+    public int htorus(Actor actor, LocalSession session, EditSession editSession,
+                      @Arg(desc = "The pattern of blocks to generate")
+                          Pattern pattern,
+                      @Arg(desc = "The major radius (distance from center to tube center)")
+                          double majorRadius,
+                      @Arg(desc = "The minor radius (tube thickness)")
+                          double minorRadius) throws WorldEditException {
+        return torus(actor, session, editSession, pattern, majorRadius, minorRadius, true);
+    }
+
+    @Command(
         name = "forestgen",
         desc = "Generate a forest"
     )

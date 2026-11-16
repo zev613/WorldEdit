@@ -165,6 +165,47 @@ public class RegionCommands {
     }
 
     @Command(
+        name = "/catenary",
+        aliases = { "/cat" },
+        desc = "Draws a hanging catenary curve (rope/chain) between selection points",
+        descFooter = "Can only be used with a cuboid selection or a convex polyhedral selection"
+    )
+    @CommandPermissions("worldedit.region.catenary")
+    @Logging(REGION)
+    public int catenary(Actor actor, EditSession editSession,
+                        @Selection Region region,
+                        @Arg(desc = "The pattern of blocks to place")
+                            Pattern pattern,
+                        @Arg(desc = "The sag (droop depth) in blocks (0 for auto)", def = "0")
+                            double sag,
+                        @Arg(desc = "The thickness of the curve", def = "0")
+                            double thickness,
+                        @Switch(name = 'h', desc = "Generate only a shell")
+                            boolean shell) throws WorldEditException {
+        if (!((region instanceof CuboidRegion) || (region instanceof ConvexPolyhedralRegion))) {
+            actor.printError(TranslatableComponent.of("worldedit.line.invalid-type"));
+            return 0;
+        }
+        checkCommandArgument(thickness >= 0, "Thickness must be >= 0");
+        checkCommandArgument(sag >= 0, "Sag must be >= 0");
+        WorldEdit.getInstance().checkMaxRadius(thickness);
+
+        List<BlockVector3> vectors;
+
+        if (region instanceof CuboidRegion cuboidRegion) {
+            vectors = ImmutableList.of(cuboidRegion.getPos1(), cuboidRegion.getPos2());
+        } else {
+            ConvexPolyhedralRegion convexRegion = (ConvexPolyhedralRegion) region;
+            vectors = ImmutableList.copyOf(convexRegion.getVertices());
+        }
+
+        int blocksChanged = editSession.drawCatenary(pattern, vectors, sag, thickness, !shell);
+
+        actor.printInfo(TranslatableComponent.of("worldedit.line.changed", TextComponent.of(blocksChanged)));
+        return blocksChanged;
+    }
+
+    @Command(
         name = "/curve",
         desc = "Draws a spline through selected points",
         descFooter = "Can only be used with a convex polyhedral selection"

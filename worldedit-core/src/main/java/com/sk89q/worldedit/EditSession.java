@@ -2798,55 +2798,215 @@ public class EditSession implements Extent, AutoCloseable {
             BlockVector3 pos1 = vectors.get(i);
             BlockVector3 pos2 = vectors.get(i + 1);
 
-            int x1 = pos1.x();
-            int y1 = pos1.y();
-            int z1 = pos1.z();
-            int x2 = pos2.x();
-            int y2 = pos2.y();
-            int z2 = pos2.z();
-            int tipx = x1;
-            int tipy = y1;
-            int tipz = z1;
-            int dx = Math.abs(x2 - x1);
-            int dy = Math.abs(y2 - y1);
-            int dz = Math.abs(z2 - z1);
+            addBresenhamLine(vset, pos1, pos2);
+        }
 
-            if (dx + dy + dz == 0) {
+        vset = getBallooned(vset, radius);
+        if (!filled) {
+            vset = getHollowed(vset);
+        }
+        return setBlocks(vset, pattern);
+    }
+
+    private static void addBresenhamLine(Set<BlockVector3> vset, BlockVector3 pos1, BlockVector3 pos2) {
+        int x1 = pos1.x();
+        int y1 = pos1.y();
+        int z1 = pos1.z();
+        int x2 = pos2.x();
+        int y2 = pos2.y();
+        int z2 = pos2.z();
+        int tipx = x1;
+        int tipy = y1;
+        int tipz = z1;
+        int dx = Math.abs(x2 - x1);
+        int dy = Math.abs(y2 - y1);
+        int dz = Math.abs(z2 - z1);
+
+        if (dx + dy + dz == 0) {
+            vset.add(BlockVector3.at(tipx, tipy, tipz));
+            return;
+        }
+
+        int dMax = Math.max(Math.max(dx, dy), dz);
+        if (dMax == dx) {
+            for (int domstep = 0; domstep <= dx; domstep++) {
+                tipx = x1 + domstep * (x2 - x1 > 0 ? 1 : -1);
+                tipy = (int) Math.round(y1 + domstep * ((double) dy) / ((double) dx) * (y2 - y1 > 0 ? 1 : -1));
+                tipz = (int) Math.round(z1 + domstep * ((double) dz) / ((double) dx) * (z2 - z1 > 0 ? 1 : -1));
                 vset.add(BlockVector3.at(tipx, tipy, tipz));
+            }
+        } else if (dMax == dy) {
+            for (int domstep = 0; domstep <= dy; domstep++) {
+                tipy = y1 + domstep * (y2 - y1 > 0 ? 1 : -1);
+                tipx = (int) Math.round(x1 + domstep * ((double) dx) / ((double) dy) * (x2 - x1 > 0 ? 1 : -1));
+                tipz = (int) Math.round(z1 + domstep * ((double) dz) / ((double) dy) * (z2 - z1 > 0 ? 1 : -1));
+                vset.add(BlockVector3.at(tipx, tipy, tipz));
+            }
+        } else {
+            for (int domstep = 0; domstep <= dz; domstep++) {
+                tipz = z1 + domstep * (z2 - z1 > 0 ? 1 : -1);
+                tipy = (int) Math.round(y1 + domstep * ((double) dy) / ((double) dz) * (y2 - y1 > 0 ? 1 : -1));
+                tipx = (int) Math.round(x1 + domstep * ((double) dx) / ((double) dz) * (x2 - x1 > 0 ? 1 : -1));
+                vset.add(BlockVector3.at(tipx, tipy, tipz));
+            }
+        }
+    }
+
+    /**
+     * Draws a catenary curve (drooping rope/chain) between two vectors.
+     *
+     * @param pattern The block pattern used to draw the curve.
+     * @param pos1 The starting position.
+     * @param pos2 The ending position.
+     * @param sag The sag depth (in blocks). If &lt;= 0, an automatic sag is chosen based on distance.
+     * @param radius The radius (thickness) of the curve.
+     * @param filled If false, only a shell will be generated.
+     * @return number of blocks affected
+     * @throws MaxChangedBlocksException thrown if too many blocks are changed
+     */
+    public int drawCatenary(Pattern pattern, BlockVector3 pos1, BlockVector3 pos2, double sag, double radius, boolean filled)
+            throws MaxChangedBlocksException {
+        return drawCatenary(pattern, ImmutableList.of(pos1, pos2), sag, radius, filled);
+    }
+
+    /**
+     * Draws catenary curves between consecutive vectors.
+     *
+     * @param pattern The block pattern used to draw the curves.
+     * @param vectors The list of vectors to draw between.
+     * @param sag The sag depth (in blocks). If &lt;= 0, an automatic sag is chosen based on distance.
+     * @param radius The radius (thickness) of the curve.
+     * @param filled If false, only a shell will be generated.
+     * @return number of blocks affected
+     * @throws MaxChangedBlocksException thrown if too many blocks are changed
+     */
+    public int drawCatenary(Pattern pattern, List<BlockVector3> vectors, double sag, double radius, boolean filled)
+            throws MaxChangedBlocksException {
+        Set<BlockVector3> vset = new HashSet<>();
+
+        for (int idx = 0; !vectors.isEmpty() && idx < vectors.size() - 1; idx++) {
+            BlockVector3 p1 = vectors.get(idx);
+            BlockVector3 p2 = vectors.get(idx + 1);
+
+            double hDist = Math.hypot(p2.x() - p1.x(), p2.z() - p1.z());
+            double vDist = p2.y() - p1.y();
+            double chordDist = Math.sqrt(hDist * hDist + vDist * vDist);
+
+            if (chordDist == 0) {
+                vset.add(p1);
                 continue;
             }
 
-            int dMax = Math.max(Math.max(dx, dy), dz);
-            if (dMax == dx) {
-                for (int domstep = 0; domstep <= dx; domstep++) {
-                    tipx = x1 + domstep * (x2 - x1 > 0 ? 1 : -1);
-                    tipy = (int) Math.round(y1 + domstep * ((double) dy) / ((double) dx) * (y2 - y1 > 0 ? 1 : -1));
-                    tipz = (int) Math.round(z1 + domstep * ((double) dz) / ((double) dx) * (z2 - z1 > 0 ? 1 : -1));
+            double effectiveSag = (sag <= 0) ? Math.max(1.0, chordDist / 8.0) : sag;
+            int steps = Math.max(10, (int) Math.ceil((hDist + Math.abs(vDist) + effectiveSag) * 3));
+            double k = 2.0;
+            double coshKMinus1 = Math.cosh(k) - 1.0;
 
-                    vset.add(BlockVector3.at(tipx, tipy, tipz));
-                }
-            } else if (dMax == dy) {
-                for (int domstep = 0; domstep <= dy; domstep++) {
-                    tipy = y1 + domstep * (y2 - y1 > 0 ? 1 : -1);
-                    tipx = (int) Math.round(x1 + domstep * ((double) dx) / ((double) dy) * (x2 - x1 > 0 ? 1 : -1));
-                    tipz = (int) Math.round(z1 + domstep * ((double) dz) / ((double) dy) * (z2 - z1 > 0 ? 1 : -1));
+            BlockVector3 lastPt = null;
+            for (int s = 0; s <= steps; s++) {
+                double t = (double) s / steps;
+                double x = p1.x() + t * (p2.x() - p1.x());
+                double z = p1.z() + t * (p2.z() - p1.z());
+                double sagCurve = effectiveSag * (1.0 - (Math.cosh(2.0 * k * (t - 0.5)) - 1.0) / coshKMinus1);
+                double y = p1.y() + t * vDist - sagCurve;
 
-                    vset.add(BlockVector3.at(tipx, tipy, tipz));
+                BlockVector3 currentPt = BlockVector3.at((int) Math.round(x), (int) Math.round(y), (int) Math.round(z));
+                if (lastPt != null) {
+                    addBresenhamLine(vset, lastPt, currentPt);
+                } else {
+                    vset.add(currentPt);
                 }
-            } else /* if (dMax == dz) */ {
-                for (int domstep = 0; domstep <= dz; domstep++) {
-                    tipz = z1 + domstep * (z2 - z1 > 0 ? 1 : -1);
-                    tipy = (int) Math.round(y1 + domstep * ((double) dy) / ((double) dz) * (y2 - y1 > 0 ? 1 : -1));
-                    tipx = (int) Math.round(x1 + domstep * ((double) dx) / ((double) dz) * (x2 - x1 > 0 ? 1 : -1));
-
-                    vset.add(BlockVector3.at(tipx, tipy, tipz));
-                }
+                lastPt = currentPt;
             }
         }
 
         vset = getBallooned(vset, radius);
         if (!filled) {
             vset = getHollowed(vset);
+        }
+        return setBlocks(vset, pattern);
+    }
+
+    /**
+     * Generates a 3D helix (spiral) around a center position.
+     *
+     * @param center The center position of the helix base.
+     * @param pattern The pattern to place.
+     * @param radiusX Radius along the X axis.
+     * @param radiusZ Radius along the Z axis.
+     * @param height Total vertical height.
+     * @param turns Number of complete rotations.
+     * @param thickness Strand thickness.
+     * @param filled Whether the strand is filled or hollow.
+     * @return number of blocks affected
+     * @throws MaxChangedBlocksException thrown if too many blocks are changed
+     */
+    public int makeHelix(BlockVector3 center, Pattern pattern, double radiusX, double radiusZ, int height,
+                         double turns, double thickness, boolean filled) throws MaxChangedBlocksException {
+        Set<BlockVector3> vset = new HashSet<>();
+        double totalAngle = 2.0 * Math.PI * turns;
+        double maxRadius = Math.max(radiusX, radiusZ);
+        double approxLength = Math.hypot(Math.abs(totalAngle) * maxRadius, Math.abs(height));
+        int steps = Math.max(20, (int) Math.ceil(approxLength * 4.0));
+
+        BlockVector3 lastPt = null;
+        for (int s = 0; s <= steps; s++) {
+            double t = (double) s / steps;
+            double angle = t * totalAngle;
+            double x = center.x() + radiusX * Math.cos(angle);
+            double z = center.z() + radiusZ * Math.sin(angle);
+            double y = center.y() + t * height;
+
+            BlockVector3 currentPt = BlockVector3.at((int) Math.round(x), (int) Math.round(y), (int) Math.round(z));
+            if (lastPt != null) {
+                addBresenhamLine(vset, lastPt, currentPt);
+            } else {
+                vset.add(currentPt);
+            }
+            lastPt = currentPt;
+        }
+
+        vset = getBallooned(vset, thickness);
+        if (!filled) {
+            vset = getHollowed(vset);
+        }
+        return setBlocks(vset, pattern);
+    }
+
+    /**
+     * Generates a 3D torus (donut) around a center position.
+     *
+     * @param center The center position.
+     * @param pattern The pattern to place.
+     * @param majorRadius Radius from center to center of tube.
+     * @param minorRadius Radius of the tube.
+     * @param filled Whether the torus is filled or hollow shell.
+     * @return number of blocks affected
+     * @throws MaxChangedBlocksException thrown if too many blocks are changed
+     */
+    public int makeTorus(BlockVector3 center, Pattern pattern, double majorRadius, double minorRadius, boolean filled)
+            throws MaxChangedBlocksException {
+        Set<BlockVector3> vset = new HashSet<>();
+        int maxR = (int) Math.ceil(majorRadius + minorRadius);
+        int ceilMinor = (int) Math.ceil(minorRadius);
+        double minorSq = minorRadius * minorRadius;
+        double innerMinorSq = Math.max(0, minorRadius - 1.0) * Math.max(0, minorRadius - 1.0);
+
+        for (int x = -maxR; x <= maxR; x++) {
+            for (int z = -maxR; z <= maxR; z++) {
+                double distXZ = Math.hypot(x, z);
+                double diff = distXZ - majorRadius;
+                double diffSq = diff * diff;
+
+                for (int y = -ceilMinor; y <= ceilMinor; y++) {
+                    double distSq = diffSq + (double) y * y;
+                    if (distSq <= minorSq) {
+                        if (filled || distSq >= innerMinorSq) {
+                            vset.add(center.add(x, y, z));
+                        }
+                    }
+                }
+            }
         }
         return setBlocks(vset, pattern);
     }
