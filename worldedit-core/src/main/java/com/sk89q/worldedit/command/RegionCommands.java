@@ -71,8 +71,11 @@ import com.sk89q.worldedit.util.formatting.component.TextUtils;
 import com.sk89q.worldedit.util.formatting.text.Component;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.formatting.text.TranslatableComponent;
+import com.sk89q.worldedit.extension.input.ParserContext;
 import com.sk89q.worldedit.world.RegenOptions;
 import com.sk89q.worldedit.world.World;
+import com.sk89q.worldedit.world.block.BlockState;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import com.sk89q.worldedit.world.generation.TreeType;
 import org.enginehub.piston.annotation.Command;
 import org.enginehub.piston.annotation.CommandContainer;
@@ -364,6 +367,156 @@ public class RegionCommands {
         int affected = heightMap.applyChanges(changed, snowBlockCount);
         actor.printInfo(TranslatableComponent.of("worldedit.snowsmooth.changed", TextComponent.of(affected)));
         return affected;
+    }
+
+    @Command(
+        name = "/strata",
+        aliases = { "/layers" },
+        desc = "Generates geological sedimentary rock strata through the selection",
+        descFooter = "Layers the selection with palettes tilted at a dip angle and azimuth direction"
+    )
+    @CommandPermissions("worldedit.region.strata")
+    @Logging(REGION)
+    public int strata(Actor actor, World world, EditSession editSession, LocalSession session,
+                      @Selection Region region,
+                      @Arg(desc = "Comma-separated list of patterns for each layer")
+                          String patternListStr,
+                      @Arg(desc = "Thickness of each layer in blocks", def = "4")
+                          double layerThickness,
+                      @Arg(desc = "Dip angle in degrees (tilt from horizontal, 0-90)", def = "15")
+                          double dipDegrees,
+                      @Arg(desc = "Azimuth angle in degrees (0 = North, 90 = East)", def = "45")
+                          double azimuthDegrees,
+                      @Arg(desc = "Waviness factor for layer boundaries", def = "0.0")
+                          double noiseFactor) throws WorldEditException {
+        checkCommandArgument(layerThickness > 0, "Layer thickness must be > 0");
+
+        Iterable<String> rawPatterns = com.google.common.base.Splitter.on(',').split(patternListStr);
+        List<Pattern> patterns = new ArrayList<>();
+        ParserContext context = new ParserContext();
+        context.setActor(actor);
+        context.setWorld(world);
+        context.setExtent(editSession);
+        for (String raw : rawPatterns) {
+            String trimmed = raw.trim();
+            if (!trimmed.isEmpty()) {
+                patterns.add(WorldEdit.getInstance().getPatternFactory().parseFromInput(trimmed, context));
+            }
+        }
+        checkCommandArgument(!patterns.isEmpty(), "At least one pattern must be specified");
+
+        double dipRad = Math.toRadians(dipDegrees);
+        double azRad = Math.toRadians(azimuthDegrees);
+        double ux = Math.sin(dipRad) * Math.sin(azRad);
+        double uy = Math.cos(dipRad);
+        double uz = Math.sin(dipRad) * Math.cos(azRad);
+
+        int affected = 0;
+        for (BlockVector3 pt : region) {
+            double d = pt.x() * ux + pt.y() * uy + pt.z() * uz;
+            if (noiseFactor != 0.0) {
+                d += noiseFactor * 3.0 * Math.sin(pt.x() * 0.15) * Math.cos(pt.z() * 0.15);
+            }
+            int layerIdx = (int) Math.floor(d / layerThickness);
+            int patIdx = Math.floorMod(layerIdx, patterns.size());
+            if (editSession.setBlock(pt, patterns.get(patIdx))) {
+                affected++;
+            }
+        }
+
+        actor.printInfo(TextComponent.of(affected + " blocks changed."));
+        return affected;
+    }
+
+    @Command(
+        name = "/erode",
+        desc = "Simulates terrain erosion (thermal talus rockfall) over the selection"
+    )
+    @CommandPermissions("worldedit.region.erode")
+    @Logging(REGION)
+    public int erode(Actor actor, EditSession editSession,
+                     @Selection Region region,
+                     @Arg(desc = "Erosion mode: thermal (talus/rockfall)", def = "thermal")
+                         String mode,
+                     @Arg(desc = "Number of iterations to perform", def = "1")
+                         int iterations) throws WorldEditException {
+        checkCommandArgument(iterations > 0, "Iterations must be > 0");
+        int totalChanges = 0;
+
+        int minX = region.getMinimumPoint().x();
+        int maxX = region.getMaximumPoint().x();
+        int minY = region.getMinimumPoint().y();
+        int maxY = region.getMaximumPoint().y();
+        int minZ = region.getMinimumPoint().z();
+        int maxZ = region.getMaximumPoint().z();
+
+        for (int iter = 0; iter < Math.min(iterations, 10); iter++) {
+            List<BlockVector3> toRemove = new ArrayList<>();
+            List<BlockVector3> toAdd = new ArrayList<>();
+            List<BlockState> addedStates = new ArrayList<>();
+
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    int topY = Integer.MIN_VALUE;
+                    BlockState topState = null;
+                    for (int y = maxY; y >= minY; y--) {
+                        BlockVector3 pt = BlockVector3.at(x, y, z);
+                        if (!region.contains(pt)) continue;
+                        BlockState state = editSession.getBlock(pt);
+                        if (state.getBlockType().getMaterial().isSolid()) {
+                            topY = y;
+                            topState = state;
+                            break;
+                        }
+                    }
+                    if (topY == Integer.MIN_VALUE) continue;
+
+                    int[][] offsets = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
+                    int lowestNeighborY = topY;
+                    int lowestNx = x;
+                    int lowestNz = z;
+
+                    for (int[] off : offsets) {
+                        int nx = x + off[0];
+                        int nz = z + off[1];
+                        int nTopY = minY - 1;
+                        for (int y = maxY; y >= minY; y--) {
+                            BlockVector3 npt = BlockVector3.at(nx, y, nz);
+                            if (!region.contains(npt)) continue;
+                            if (editSession.getBlock(npt).getBlockType().getMaterial().isSolid()) {
+                                nTopY = y;
+                                break;
+                            }
+                        }
+                        if (nTopY < lowestNeighborY) {
+                            lowestNeighborY = nTopY;
+                            lowestNx = nx;
+                            lowestNz = nz;
+                        }
+                    }
+
+                    if (topY - lowestNeighborY >= 2 && lowestNeighborY >= minY) {
+                        toRemove.add(BlockVector3.at(x, topY, z));
+                        toAdd.add(BlockVector3.at(lowestNx, lowestNeighborY + 1, lowestNz));
+                        addedStates.add(topState);
+                    }
+                }
+            }
+
+            for (BlockVector3 rem : toRemove) {
+                if (editSession.setBlock(rem, BlockTypes.AIR.getDefaultState())) {
+                    totalChanges++;
+                }
+            }
+            for (int i = 0; i < toAdd.size(); i++) {
+                if (editSession.setBlock(toAdd.get(i), addedStates.get(i))) {
+                    totalChanges++;
+                }
+            }
+        }
+
+        actor.printInfo(TextComponent.of(totalChanges + " blocks changed."));
+        return totalChanges;
     }
 
     @Command(
