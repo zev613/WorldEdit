@@ -643,6 +643,413 @@ public class RegionCommands {
     }
 
     @Command(
+        name = "/autostairs",
+        aliases = { "/autostair" },
+        desc = "Automatically detects step slopes and places oriented stairs and slabs"
+    )
+    @CommandPermissions("worldedit.region.autostairs")
+    @Logging(REGION)
+    public int autoStairs(Actor actor, EditSession editSession,
+                          @Selection Region region,
+                          @Arg(desc = "The stair pattern/material to place")
+                              Pattern stairPattern,
+                          @Arg(desc = "Optional slab pattern for gentle steps", def = "")
+                              Pattern slabPattern,
+                          @Switch(name = 'u', desc = "Detect upside-down / ceiling stairs")
+                              boolean upsideDown) throws WorldEditException {
+        int vDir = upsideDown ? -1 : 1;
+        int changed = 0;
+
+        for (BlockVector3 pt : region) {
+            BlockState current = editSession.getBlock(pt);
+            if (current.getBlockType().getMaterial().isAir()) {
+                continue;
+            }
+            BlockVector3 above = pt.add(0, vDir, 0);
+            if (!editSession.getBlock(above).getBlockType().getMaterial().isAir()) {
+                continue;
+            }
+
+            boolean higherNorth = !editSession.getBlock(pt.add(0, vDir, -1)).getBlockType().getMaterial().isAir();
+            boolean higherSouth = !editSession.getBlock(pt.add(0, vDir, 1)).getBlockType().getMaterial().isAir();
+            boolean higherEast = !editSession.getBlock(pt.add(1, vDir, 0)).getBlockType().getMaterial().isAir();
+            boolean higherWest = !editSession.getBlock(pt.add(-1, vDir, 0)).getBlockType().getMaterial().isAir();
+
+            boolean lowerNorth = editSession.getBlock(pt.add(0, 0, -1)).getBlockType().getMaterial().isAir();
+            boolean lowerSouth = editSession.getBlock(pt.add(0, 0, 1)).getBlockType().getMaterial().isAir();
+            boolean lowerEast = editSession.getBlock(pt.add(1, 0, 0)).getBlockType().getMaterial().isAir();
+            boolean lowerWest = editSession.getBlock(pt.add(-1, 0, 0)).getBlockType().getMaterial().isAir();
+
+            int higherCount = (higherNorth ? 1 : 0) + (higherSouth ? 1 : 0) + (higherEast ? 1 : 0) + (higherWest ? 1 : 0);
+            int lowerCount = (lowerNorth ? 1 : 0) + (lowerSouth ? 1 : 0) + (lowerEast ? 1 : 0) + (lowerWest ? 1 : 0);
+
+            if (higherCount == 0 && lowerCount == 0) {
+                continue;
+            }
+
+            if (slabPattern != null && higherCount == 0 && lowerCount == 1) {
+                BlockState slabState = slabPattern.applyBlock(pt).toImmutableState();
+                var typeProp = slabState.getBlockType().getProperty("type");
+                if (typeProp != null) {
+                    slabState = applyPropertyString(slabState, typeProp, upsideDown ? "top" : "bottom");
+                }
+                if (editSession.setBlock(pt, slabState)) {
+                    changed++;
+                }
+                continue;
+            }
+
+            String facing;
+            String shape = "straight";
+
+            if (higherNorth && !higherSouth) {
+                facing = "south";
+                if (higherWest) {
+                    shape = "inner_right";
+                } else if (higherEast) {
+                    shape = "inner_left";
+                } else if (lowerWest) {
+                    shape = "outer_right";
+                } else if (lowerEast) {
+                    shape = "outer_left";
+                }
+            } else if (higherSouth && !higherNorth) {
+                facing = "north";
+                if (higherEast) {
+                    shape = "inner_right";
+                } else if (higherWest) {
+                    shape = "inner_left";
+                } else if (lowerEast) {
+                    shape = "outer_right";
+                } else if (lowerWest) {
+                    shape = "outer_left";
+                }
+            } else if (higherWest && !higherEast) {
+                facing = "east";
+                if (higherSouth) {
+                    shape = "inner_right";
+                } else if (higherNorth) {
+                    shape = "inner_left";
+                } else if (lowerSouth) {
+                    shape = "outer_right";
+                } else if (lowerNorth) {
+                    shape = "outer_left";
+                }
+            } else if (higherEast && !higherWest) {
+                facing = "west";
+                if (higherNorth) {
+                    shape = "inner_right";
+                } else if (higherSouth) {
+                    shape = "inner_left";
+                } else if (lowerNorth) {
+                    shape = "outer_right";
+                } else if (lowerSouth) {
+                    shape = "outer_left";
+                }
+            } else if (lowerNorth && !lowerSouth) {
+                facing = "north";
+                if (lowerEast) {
+                    shape = "outer_right";
+                } else if (lowerWest) {
+                    shape = "outer_left";
+                }
+            } else if (lowerSouth && !lowerNorth) {
+                facing = "south";
+                if (lowerWest) {
+                    shape = "outer_right";
+                } else if (lowerEast) {
+                    shape = "outer_left";
+                }
+            } else if (lowerEast && !lowerWest) {
+                facing = "east";
+                if (lowerSouth) {
+                    shape = "outer_right";
+                } else if (lowerNorth) {
+                    shape = "outer_left";
+                }
+            } else if (lowerWest && !lowerEast) {
+                facing = "west";
+                if (lowerNorth) {
+                    shape = "outer_right";
+                } else if (lowerSouth) {
+                    shape = "outer_left";
+                }
+            } else {
+                continue;
+            }
+
+            BlockState targetState = stairPattern.applyBlock(pt).toImmutableState();
+            var bType = targetState.getBlockType();
+            var facingProp = bType.getProperty("facing");
+            var halfProp = bType.getProperty("half");
+            var shapeProp = bType.getProperty("shape");
+
+            if (facingProp != null) {
+                targetState = applyPropertyString(targetState, facingProp, facing);
+            }
+            if (halfProp != null) {
+                targetState = applyPropertyString(targetState, halfProp, upsideDown ? "top" : "bottom");
+            }
+            if (shapeProp != null) {
+                targetState = applyPropertyString(targetState, shapeProp, shape);
+            }
+
+            if (editSession.setBlock(pt, targetState)) {
+                changed++;
+            }
+        }
+
+        actor.printInfo(TextComponent.of(changed + " stair blocks placed and oriented."));
+        return changed;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <V> BlockState applyPropertyString(BlockState state, com.sk89q.worldedit.registry.state.Property<V> prop, String valStr) {
+        try {
+            V val = prop.getValueFor(valStr);
+            if (val != null) {
+                return state.with(prop, val);
+            }
+        } catch (Exception expected) {
+            // Ignored if property value is invalid
+        }
+        return state;
+    }
+
+    @Command(
+        name = "/roof",
+        desc = "Generates a parametric roof (gable, hip, shed, curved, or mansard) over the selected region"
+    )
+    @CommandPermissions("worldedit.region.roof")
+    @Logging(REGION)
+    public int roof(Actor actor, EditSession editSession,
+                    @Selection Region region,
+                    @Arg(desc = "Roof type: gable, hip, shed, curved, or mansard", def = "gable")
+                        String type,
+                    @Arg(desc = "The pattern of blocks to generate the roof with")
+                        Pattern pattern,
+                    @Arg(desc = "Overhang distance in blocks", def = "0")
+                        int overhang,
+                    @Arg(desc = "Pitch / height multiplier", def = "1.0")
+                        double pitch,
+                    @Switch(name = 'h', desc = "Generate hollow roof shell only")
+                        boolean hollow) throws WorldEditException {
+        checkCommandArgument(overhang >= 0, "Overhang must be >= 0");
+        checkCommandArgument(pitch > 0, "Pitch must be > 0");
+
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+        int minX = min.x() - overhang;
+        int maxX = max.x() + overhang;
+        int minZ = min.z() - overhang;
+        int maxZ = max.z() + overhang;
+
+        int regionHeight = max.y() - min.y();
+        int baseY = (regionHeight > 1) ? min.y() : max.y();
+        double spanX = Math.max(1.0, (maxX - minX));
+        double spanZ = Math.max(1.0, (maxZ - minZ));
+        double halfSpan = Math.max(1.0, Math.min(spanX, spanZ) / 2.0);
+        double targetHeight = (regionHeight > 1) ? regionHeight : (halfSpan * pitch);
+
+        String roofType = type.toLowerCase(java.util.Locale.ROOT);
+        int changed = 0;
+
+        int sizeX = maxX - minX + 1;
+        int sizeZ = maxZ - minZ + 1;
+        int[][] heights = new int[sizeX][sizeZ];
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                double t;
+                switch (roofType) {
+                    case "hip" -> {
+                        double distX = Math.min(x - minX, maxX - x);
+                        double distZ = Math.min(z - minZ, maxZ - z);
+                        t = Math.min(1.0, Math.min(distX, distZ) / halfSpan);
+                    }
+                    case "shed" -> {
+                        t = (spanX > 0) ? (x - minX) / spanX : 0.0;
+                    }
+                    case "curved" -> {
+                        double distX = Math.min(x - minX, maxX - x);
+                        t = Math.min(1.0, distX / (spanX / 2.0));
+                        t = Math.pow(t, 0.65);
+                    }
+                    case "mansard" -> {
+                        double distX = Math.min(x - minX, maxX - x);
+                        double distZ = Math.min(z - minZ, maxZ - z);
+                        double rawDist = Math.min(1.0, Math.min(distX, distZ) / halfSpan);
+                        t = (rawDist < 0.4) ? (rawDist / 0.4) * 0.7 : 0.7 + ((rawDist - 0.4) / 0.6) * 0.3;
+                    }
+                    case "gable" -> {
+                        if (spanX <= spanZ) {
+                            double distX = Math.min(x - minX, maxX - x);
+                            t = Math.min(1.0, distX / (spanX / 2.0));
+                        } else {
+                            double distZ = Math.min(z - minZ, maxZ - z);
+                            t = Math.min(1.0, distZ / (spanZ / 2.0));
+                        }
+                    }
+                    default -> {
+                        if (spanX <= spanZ) {
+                            double distX = Math.min(x - minX, maxX - x);
+                            t = Math.min(1.0, distX / (spanX / 2.0));
+                        } else {
+                            double distZ = Math.min(z - minZ, maxZ - z);
+                            t = Math.min(1.0, distZ / (spanZ / 2.0));
+                        }
+                    }
+                }
+                heights[x - minX][z - minZ] = baseY + (int) Math.round(t * targetHeight);
+            }
+        }
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                int topY = heights[x - minX][z - minZ];
+                int startY;
+                if (hollow) {
+                    int minNeighbor = topY;
+                    if (x > minX) {
+                        minNeighbor = Math.min(minNeighbor, heights[x - minX - 1][z - minZ]);
+                    }
+                    if (x < maxX) {
+                        minNeighbor = Math.min(minNeighbor, heights[x - minX + 1][z - minZ]);
+                    }
+                    if (z > minZ) {
+                        minNeighbor = Math.min(minNeighbor, heights[x - minX][z - minZ - 1]);
+                    }
+                    if (z < maxZ) {
+                        minNeighbor = Math.min(minNeighbor, heights[x - minX][z - minZ + 1]);
+                    }
+                    startY = Math.max(baseY, minNeighbor);
+                } else {
+                    startY = baseY;
+                }
+
+                for (int y = startY; y <= topY; y++) {
+                    BlockVector3 pt = BlockVector3.at(x, y, z);
+                    if (editSession.setBlock(pt, pattern)) {
+                        changed++;
+                    }
+                }
+            }
+        }
+
+        actor.printInfo(TextComponent.of(changed + " blocks placed for " + roofType + " roof."));
+        return changed;
+    }
+
+    @Command(
+        name = "/insetfaces",
+        aliases = { "/insetface", "/panelinset" },
+        desc = "Insets the outer surface faces of the selection by a given border margin, creating panels or recesses"
+    )
+    @CommandPermissions("worldedit.region.insetfaces")
+    @Logging(REGION)
+    public int insetFaces(Actor actor, EditSession editSession,
+                          @Selection Region region,
+                          @Arg(desc = "Border margin to inset from face boundaries (in blocks)", def = "1")
+                              int margin,
+                          @Arg(desc = "The pattern to set in the inset panel")
+                              Pattern pattern,
+                          @Arg(desc = "Depth of recess into the wall (positive = recessed, 0 = surface panel)", def = "1")
+                              int depth) throws WorldEditException {
+        checkCommandArgument(margin >= 0, "Margin must be >= 0");
+        checkCommandArgument(depth >= 0, "Depth must be >= 0");
+
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+        int changed = 0;
+
+        // North face (z = min.z())
+        if (min.x() + margin <= max.x() - margin && min.y() + margin <= max.y() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.x() + margin, max.x() - margin,
+                min.y() + margin, max.y() - margin,
+                min.z(), BlockVector3.at(0, 0, 1), depth, 0);
+        }
+
+        // South face (z = max.z())
+        if (max.z() != min.z() && min.x() + margin <= max.x() - margin && min.y() + margin <= max.y() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.x() + margin, max.x() - margin,
+                min.y() + margin, max.y() - margin,
+                max.z(), BlockVector3.at(0, 0, -1), depth, 0);
+        }
+
+        // West face (x = min.x())
+        if (min.z() + margin <= max.z() - margin && min.y() + margin <= max.y() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.z() + margin, max.z() - margin,
+                min.y() + margin, max.y() - margin,
+                min.x(), BlockVector3.at(1, 0, 0), depth, 1);
+        }
+
+        // East face (x = max.x())
+        if (max.x() != min.x() && min.z() + margin <= max.z() - margin && min.y() + margin <= max.y() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.z() + margin, max.z() - margin,
+                min.y() + margin, max.y() - margin,
+                max.x(), BlockVector3.at(-1, 0, 0), depth, 1);
+        }
+
+        // Down face (y = min.y())
+        if (min.x() + margin <= max.x() - margin && min.z() + margin <= max.z() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.x() + margin, max.x() - margin,
+                min.z() + margin, max.z() - margin,
+                min.y(), BlockVector3.at(0, 1, 0), depth, 2);
+        }
+
+        // Up face (y = max.y())
+        if (max.y() != min.y() && min.x() + margin <= max.x() - margin && min.z() + margin <= max.z() - margin) {
+            changed += applyInsetFace(editSession, pattern,
+                min.x() + margin, max.x() - margin,
+                min.z() + margin, max.z() - margin,
+                max.y(), BlockVector3.at(0, -1, 0), depth, 2);
+        }
+
+        actor.printInfo(TextComponent.of(changed + " blocks updated with inset detailing."));
+        return changed;
+    }
+
+    private static int applyInsetFace(EditSession editSession, Pattern pattern,
+                                      int uMin, int uMax, int vMin, int vMax,
+                                      int fixedCoord, BlockVector3 inward, int depth, int planeType)
+            throws WorldEditException {
+        int count = 0;
+        BlockType airType = com.sk89q.worldedit.world.block.BlockTypes.AIR;
+        for (int u = uMin; u <= uMax; u++) {
+            for (int v = vMin; v <= vMax; v++) {
+                BlockVector3 surfacePt = switch (planeType) {
+                    case 0 -> BlockVector3.at(u, v, fixedCoord);
+                    case 1 -> BlockVector3.at(fixedCoord, v, u);
+                    default -> BlockVector3.at(u, fixedCoord, v);
+                };
+
+                if (depth == 0) {
+                    if (editSession.setBlock(surfacePt, pattern)) {
+                        count++;
+                    }
+                } else {
+                    for (int d = 0; d < depth; d++) {
+                        BlockVector3 carvePt = surfacePt.add(inward.multiply(d));
+                        if (airType != null && editSession.setBlock(carvePt, airType.getDefaultState())) {
+                            count++;
+                        }
+                    }
+                    BlockVector3 backPt = surfacePt.add(inward.multiply(depth));
+                    if (editSession.setBlock(backPt, pattern)) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    @Command(
         name = "/move",
         desc = "Move the contents of the selection"
     )
