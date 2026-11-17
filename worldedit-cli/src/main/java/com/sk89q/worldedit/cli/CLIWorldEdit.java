@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.cli.data.DataFile;
 import com.sk89q.worldedit.cli.data.FileRegistries;
+import com.sk89q.worldedit.cli.prune.PruneCommand;
 import com.sk89q.worldedit.cli.schematic.ClipboardWorld;
 import com.sk89q.worldedit.event.platform.CommandEvent;
 import com.sk89q.worldedit.event.platform.ConfigurationLoadEvent;
@@ -294,6 +295,10 @@ public class CLIWorldEdit {
     }
 
     public static void main(String[] args) {
+        if (args.length > 0 && PruneCommand.NAME.equals(args[0])) {
+            System.exit(PruneCommand.run(Arrays.copyOfRange(args, 1, args.length), System.out));
+            return;
+        }
         Options options = new Options();
         options.addOption("f", "file", true, "The file to load in. Either a schematic, or a level.dat in a world folder.");
         options.addOption("s", "script", true, "A file containing a list of commands to run. Newline separated.");

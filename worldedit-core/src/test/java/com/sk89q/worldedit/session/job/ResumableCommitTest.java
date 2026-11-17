@@ -55,8 +55,15 @@ class ResumableCommitTest extends BaseWorldEditTest {
 
     @BeforeAll
     static void registerBlocks() {
-        BlockType.REGISTRY.register("minecraft:air", new BlockType("minecraft:air"));
-        BlockType.REGISTRY.register("minecraft:stone", new BlockType("minecraft:stone"));
+        registerIfAbsent("minecraft:air");
+        registerIfAbsent("minecraft:stone");
+    }
+
+    private static void registerIfAbsent(String id) {
+        // Other test classes may have registered (and not cleared) some of these already
+        if (BlockType.REGISTRY.get(id) == null) {
+            BlockType.REGISTRY.register(id, new BlockType(id));
+        }
     }
 
     @AfterAll

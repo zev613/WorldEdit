@@ -102,6 +102,8 @@ public class LocalSession {
     private transient Placement placement = new Placement(PlacementType.PLAYER, BlockVector3.ZERO);
     private final transient ArrayDeque<EditSession> history = new ArrayDeque<>();
     private transient int historyPointer = 0;
+    @Nullable
+    private transient com.sk89q.worldedit.session.HistoryListener historyListener;
     private transient ClipboardHolder clipboard;
     private final transient java.util.Map<String, ClipboardHolder> namedClipboards = new java.util.concurrent.ConcurrentHashMap<>();
     private transient boolean superPickaxe = false;
@@ -224,6 +226,9 @@ public class LocalSession {
     public void clearHistory() {
         history.clear();
         historyPointer = 0;
+        if (historyListener != null) {
+            historyListener.onClear();
+        }
     }
 
     /**
@@ -249,6 +254,9 @@ public class LocalSession {
             history.removeFirst();
         }
         historyPointer = history.size();
+        if (historyListener != null) {
+            historyListener.onRemember(editSession, java.util.Collections.unmodifiableCollection(history));
+        }
     }
 
     /**
@@ -269,6 +277,9 @@ public class LocalSession {
                          .build()) {
                 prepareEditingExtents(newEditSession, actor);
                 editSession.undo(newEditSession);
+            }
+            if (historyListener != null) {
+                historyListener.onUndo(editSession);
             }
             return editSession;
         } else {
@@ -296,10 +307,47 @@ public class LocalSession {
                 editSession.redo(newEditSession);
             }
             ++historyPointer;
+            if (historyListener != null) {
+                historyListener.onRedo(editSession);
+            }
             return editSession;
         }
 
         return null;
+    }
+
+    /**
+     * Get an edit that the next undo(s) would revert, without undoing it.
+     *
+     * @param stepsBack 0 for the edit the next undo reverts, 1 for the one before, ...
+     * @return the edit, or {@code null} if there is none
+     */
+    @Nullable
+    public EditSession getUndoHistoryEntry(int stepsBack) {
+        int index = historyPointer - 1 - stepsBack;
+        if (stepsBack < 0 || index < 0 || index >= history.size()) {
+            return null;
+        }
+        return Iterables.get(history, index);
+    }
+
+    /**
+     * Get the listener notified of history changes (used for persistent history).
+     *
+     * @return the listener, or {@code null}
+     */
+    @Nullable
+    public com.sk89q.worldedit.session.HistoryListener getHistoryListener() {
+        return historyListener;
+    }
+
+    /**
+     * Set the listener notified of history changes.
+     *
+     * @param historyListener the listener, or {@code null}
+     */
+    public void setHistoryListener(@Nullable com.sk89q.worldedit.session.HistoryListener historyListener) {
+        this.historyListener = historyListener;
     }
 
     public boolean hasWorldOverride() {

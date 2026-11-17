@@ -90,6 +90,10 @@ public abstract class LocalConfiguration {
     public int timeSlicedEditTickBudget = 20;
     /** Maximum number of preview blocks shown to a player at once. */
     public int maxPreviewBlocks = 100_000;
+    /**
+     * Number of edits per player kept on disk so they can be undone after a restart. 0 disables.
+     */
+    public int persistentHistorySize = 15;
     public Set<String> allowedDataCycleBlocks = new HashSet<>();
     public String saveDir = "schematics";
     public String scriptsDir = "craftscripts";

@@ -52,9 +52,16 @@ class EditPreviewTest extends BaseWorldEditTest {
 
     @BeforeAll
     static void registerBlocks() {
-        BlockType.REGISTRY.register("minecraft:air", new BlockType("minecraft:air"));
-        BlockType.REGISTRY.register("minecraft:stone", new BlockType("minecraft:stone"));
-        BlockType.REGISTRY.register("minecraft:glass", new BlockType("minecraft:glass"));
+        registerIfAbsent("minecraft:air");
+        registerIfAbsent("minecraft:stone");
+        registerIfAbsent("minecraft:glass");
+    }
+
+    private static void registerIfAbsent(String id) {
+        // Other test classes may have registered (and not cleared) some of these already
+        if (BlockType.REGISTRY.get(id) == null) {
+            BlockType.REGISTRY.register(id, new BlockType(id));
+        }
     }
 
     @AfterAll
