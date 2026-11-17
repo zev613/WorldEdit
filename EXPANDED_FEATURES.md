@@ -93,6 +93,15 @@ instead of clearing it. Files go in the `heightmaps` folder of WorldEdit's confi
 | `//scatter <count> [minSpacing] [-k name] [-o yOffset] [-r seed] [-n] [-a]` | Places `count` randomly rotated copies of your clipboard (or named clipboard `-k`), spread out across the surface of the selection, e.g. rocks, ruins or bushes. `-n`: no rotation, `-a`: skip air, `-r`: repeatable result. The selection must reach down to the ground. |
 | `//ptree <log> <leaves> [height] [branches] [leafRadius] [-l lean°] [-t 1\|2] [-r seed] [-d]` | A custom tree at your position with a leaning, curving trunk (`-t 2` for 2×2), branches ending in leaf clusters, and a crown. Leaves are made persistent unless you pass `-d`. |
 
+## Building tools
+
+| Command | What it does |
+|---|---|
+| `//retheme <from> <to> [-m mask]` | Swaps a whole material family in the selection and keeps stair facing, door hinges, sign text and so on. Examples: `//retheme oak spruce`, `//retheme oak crimson` (logs become stems, leaves become wart blocks), `//retheme cobblestone mossy_cobblestone`, `//retheme stone_brick deepslate_brick`. Blocks with no equivalent are left alone and listed. `oak` doesn't touch `dark_oak`/`pale_oak`. |
+| `//symmetry [x\|z\|xz\|off] [-p]` (alias `//sym`) | Mirrors everything you build, with commands *and* brushes, across a plane through where you stand (`-p`: through the selection centre). `xz` mirrors 4 ways. Stairs, doors etc. are flipped correctly, and one `//undo` undoes both sides. It only applies in the world where you turned it on, and is forgotten on restart. (`//mirror` was already taken by `//flip`.) |
+| `//lightfill [minLight] [-b block] [-s spacing]` | Makes the selection mob-proof: adds light sources (invisible `light` blocks by default, or e.g. `-b torch`) until every spot a mob could spawn on has at least `minLight` block light (default 1). Lower `-s` spreads lights more densely. The lighting is an approximation of the game's. |
+| `//find <mask> [limit] [-r radius] [-c]` | Lists the nearest blocks matching the mask in the selection (or within `-r` blocks of you) plus the total. Click coordinates to set pos1, or `[tp]` to teleport. `-c` shows which chunks have the most matches. |
+
 ## New commands
 
 | Command | What it does |
@@ -131,5 +140,6 @@ On servers with a permissions plugin, the new nodes are:
 `worldedit.region.insetfaces`, `worldedit.clipboard.list`, `worldedit.preview`, `worldedit.jobs`
 (plus `worldedit.jobs.others` to cancel/finish other players' jobs), `worldedit.region.texture`,
 `worldedit.heightmap.import`, `worldedit.heightmap.export`, `worldedit.generation.path`, `worldedit.generation.river`,
-`worldedit.generation.scatter`, `worldedit.generation.ptree`. `//measure` uses `worldedit.selection.size`.
+`worldedit.generation.scatter`, `worldedit.generation.ptree`, `worldedit.region.retheme`, `worldedit.symmetry`,
+`worldedit.region.lightfill`, `worldedit.find`. `//measure` uses `worldedit.selection.size`.
 In single-player, and for operators, everything is allowed.
