@@ -36,6 +36,54 @@ Remove any other WorldEdit jar first. Use the `-dist` jar, not `-dist-slim` (an 
 Other platforms work the same way, e.g. `./gradlew :worldedit-fabric:runClient` for Fabric.
 `./gradlew build` builds everything, with jars in `worldedit-<platform>/build/libs`.
 
+## Edit preview
+
+`//preview` turns preview mode on (run it again to turn it off). While it's on, your edits (commands *and* brushes)
+are not built. Instead you see them as "ghost" blocks that only you can see, so it works with a plain vanilla client.
+Previewed edits stack: a second command sees the result of the first.
+
+| Command | What it does |
+|---|---|
+| `//preview [on\|off]` | Turn preview mode on or off. Turning it off throws away anything not yet applied. |
+| `//preview apply` | Build everything you're previewing, as one edit you can `//undo`. |
+| `//preview cancel` | Throw away the previewed changes and show the real world again. |
+| `//preview show` | Re-send the ghost blocks (they vanish if you walk far away and the chunks reload). |
+| `//preview status` | Is preview mode on, and how many changes are waiting. |
+
+Notes: only blocks are previewed. Biome changes and pasted entities are skipped while previewing, and commands that
+*remove* entities (`//butcher`, `//remove`) still act immediately. `//undo`/`//redo` always work on the real world.
+At most `max-preview-blocks` (default 100,000) ghost blocks are shown at once; bigger previews can still be applied.
+
+## Large edits without freezing the server
+
+Like AsyncWorldEdit, big edits (50,000+ changed blocks by default) are written into the world a slice at a time,
+using at most 20 ms of each server tick, so the server keeps running while a huge `//set` or paste goes in.
+You get a message when it starts and finishes.
+
+* The edit is still *calculated* all at once; what's spread out is placing the blocks, which is usually the slow part.
+* Starting another edit in the same world first finishes any edits still being placed there, so nothing gets out of
+  order. Stopping the server finishes them too.
+* `//jobs` lists edits being placed, `//jobs cancel <id>` stops one (the part already placed can be `//undo`ne),
+  and `//jobs finish` places the rest immediately.
+* Works on NeoForge and Fabric. Settings in `worldedit.properties`: `time-sliced-edits`, `time-sliced-edit-threshold`,
+  `time-sliced-edit-tick-budget-ms`, `max-preview-blocks`.
+
+## Terrain painting and heightmaps
+
+`//texture <rules> [-d depth] [-s noiseScale]` paints the top of the terrain in the selection by rules, picking the
+first rule that matches each column. A rule is `pattern@condition&condition...`, or just `pattern` for "anything else".
+Conditions: `y>N`, `y<N`, `slope>D`, `slope<D` (degrees), `noise>F`, `noise<F` (0-1), and `>=`/`<=` also work.
+
+```
+//texture snow_block@y>140,stone@slope>45,coarse_dirt@noise>0.7&slope>25,grass_block
+```
+
+`//heightmap export <file> [-c] [-f]` saves the selection's terrain heights as a 16-bit grayscale PNG
+(`-c`: a colour map of the top blocks instead; `-f`: overwrite). `//heightmap import <file> <pattern> [maxHeight] [-t topPattern] [-k]`
+builds terrain from a PNG stretched to fit the selection: black is the bottom of the selection, white is `maxHeight`
+blocks up (default: the top of the selection). `-t` sets the surface block, and `-k` keeps what's above the new surface
+instead of clearing it. Files go in the `heightmaps` folder of WorldEdit's config directory.
+
 ## New commands
 
 | Command | What it does |
@@ -71,5 +119,7 @@ Other platforms work the same way, e.g. `./gradlew :worldedit-fabric:runClient` 
 On servers with a permissions plugin, the new nodes are:
 `worldedit.generation.helix`, `worldedit.generation.torus`, `worldedit.region.catenary`, `worldedit.region.strata`,
 `worldedit.region.erode`, `worldedit.region.weather`, `worldedit.region.autostairs`, `worldedit.region.roof`,
-`worldedit.region.insetfaces`, `worldedit.clipboard.list`. `//measure` uses `worldedit.selection.size`.
+`worldedit.region.insetfaces`, `worldedit.clipboard.list`, `worldedit.preview`, `worldedit.jobs`
+(plus `worldedit.jobs.others` to cancel/finish other players' jobs), `worldedit.region.texture`,
+`worldedit.heightmap.import`, `worldedit.heightmap.export`. `//measure` uses `worldedit.selection.size`.
 In single-player, and for operators, everything is allowed.
