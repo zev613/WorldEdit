@@ -33,19 +33,31 @@ import com.sk89q.worldedit.command.BiomeCommands;
 import com.sk89q.worldedit.command.BiomeCommandsRegistration;
 import com.sk89q.worldedit.command.BrushCommands;
 import com.sk89q.worldedit.command.BrushCommandsRegistration;
+import com.sk89q.worldedit.command.BuildToolCommands;
+import com.sk89q.worldedit.command.BuildToolCommandsRegistration;
 import com.sk89q.worldedit.command.ChunkCommands;
 import com.sk89q.worldedit.command.ChunkCommandsRegistration;
 import com.sk89q.worldedit.command.ClipboardCommands;
 import com.sk89q.worldedit.command.ClipboardCommandsRegistration;
+import com.sk89q.worldedit.command.DiffCommands;
+import com.sk89q.worldedit.command.DiffCommandsRegistration;
+import com.sk89q.worldedit.command.EditJobCommands;
+import com.sk89q.worldedit.command.EditJobCommandsRegistration;
 import com.sk89q.worldedit.command.ExpandCommands;
 import com.sk89q.worldedit.command.GeneralCommands;
 import com.sk89q.worldedit.command.GenerationCommands;
 import com.sk89q.worldedit.command.GenerationCommandsRegistration;
+import com.sk89q.worldedit.command.HeightmapCommands;
+import com.sk89q.worldedit.command.HeightmapCommandsRegistration;
 import com.sk89q.worldedit.command.HistoryCommands;
 import com.sk89q.worldedit.command.HistoryCommandsRegistration;
+import com.sk89q.worldedit.command.LandscapeCommands;
+import com.sk89q.worldedit.command.LandscapeCommandsRegistration;
 import com.sk89q.worldedit.command.NavigationCommands;
 import com.sk89q.worldedit.command.NavigationCommandsRegistration;
 import com.sk89q.worldedit.command.PaintBrushCommands;
+import com.sk89q.worldedit.command.PreviewCommands;
+import com.sk89q.worldedit.command.PreviewCommandsRegistration;
 import com.sk89q.worldedit.command.RegionCommands;
 import com.sk89q.worldedit.command.RegionCommandsRegistration;
 import com.sk89q.worldedit.command.SchematicCommands;
@@ -60,6 +72,8 @@ import com.sk89q.worldedit.command.SnapshotUtilCommands;
 import com.sk89q.worldedit.command.SnapshotUtilCommandsRegistration;
 import com.sk89q.worldedit.command.SuperPickaxeCommands;
 import com.sk89q.worldedit.command.SuperPickaxeCommandsRegistration;
+import com.sk89q.worldedit.command.TerrainPaintCommands;
+import com.sk89q.worldedit.command.TerrainPaintCommandsRegistration;
 import com.sk89q.worldedit.command.ToolCommands;
 import com.sk89q.worldedit.command.ToolUtilCommands;
 import com.sk89q.worldedit.command.ToolUtilCommandsRegistration;
@@ -368,6 +382,11 @@ public final class PlatformCommandManager {
         );
         this.registration.register(
             commandManager,
+            BuildToolCommandsRegistration.builder(),
+            new BuildToolCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
             ChunkCommandsRegistration.builder(),
             new ChunkCommands(worldEdit)
         );
@@ -375,6 +394,11 @@ public final class PlatformCommandManager {
             commandManager,
             ClipboardCommandsRegistration.builder(),
             new ClipboardCommands()
+        );
+        this.registration.register(
+            commandManager,
+            DiffCommandsRegistration.builder(),
+            new DiffCommands()
         );
         GeneralCommands.register(
             registration,
@@ -387,10 +411,22 @@ public final class PlatformCommandManager {
             GenerationCommandsRegistration.builder(),
             new GenerationCommands(worldEdit)
         );
+        registerSubCommands(
+            "/heightmap",
+            ImmutableList.of("/hmap"),
+            "Heightmap image import/export commands",
+            HeightmapCommandsRegistration.builder(),
+            new HeightmapCommands(worldEdit)
+        );
         this.registration.register(
             commandManager,
             HistoryCommandsRegistration.builder(),
             new HistoryCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            LandscapeCommandsRegistration.builder(),
+            new LandscapeCommands(worldEdit)
         );
         this.registration.register(
             commandManager,
@@ -417,6 +453,21 @@ public final class PlatformCommandManager {
             commandManager,
             SnapshotUtilCommandsRegistration.builder(),
             new SnapshotUtilCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            PreviewCommandsRegistration.builder(),
+            new PreviewCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            EditJobCommandsRegistration.builder(),
+            new EditJobCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            TerrainPaintCommandsRegistration.builder(),
+            new TerrainPaintCommands()
         );
         ToolCommands.register(registration, commandManager, commandManagerService, worldEdit);
         this.registration.register(
@@ -535,7 +586,8 @@ public final class PlatformCommandManager {
                     if (editSessionOpt.isPresent()) {
                         EditSession editSession = editSessionOpt.get();
                         session.remember(editSession);
-                        editSession.close();
+                        // Large edits may be applied over several ticks; nothing reads the world after this
+                        editSession.closeDeferrable();
 
                         if (config.profile) {
                             long time = System.currentTimeMillis() - start;

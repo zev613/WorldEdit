@@ -25,7 +25,9 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.collection.BlockMap;
 import com.sk89q.worldedit.world.block.BaseBlock;
 
+import java.util.Iterator;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -33,6 +35,7 @@ public class SetBlockMap implements Operation {
 
     private final Extent extent;
     private final BlockMap<BaseBlock> blocks;
+    private @Nullable Iterator<Map.Entry<BlockVector3, BaseBlock>> iterator;
 
     public SetBlockMap(Extent extent, BlockMap<BaseBlock> blocks) {
         this.extent = checkNotNull(extent);
@@ -41,9 +44,20 @@ public class SetBlockMap implements Operation {
 
     @Override
     public Operation resume(RunContext run) throws WorldEditException {
-        for (Map.Entry<BlockVector3, BaseBlock> entry : blocks.entrySet()) {
+        // Resumable, so that large edits can be spread over several ticks. The map is not
+        // modified while we iterate, so the iterator can be kept between calls.
+        if (iterator == null) {
+            iterator = blocks.entrySet().iterator();
+        }
+        int count = 0;
+        while (iterator.hasNext()) {
+            if ((++count & 255) == 0 && !run.shouldContinue()) {
+                return this;
+            }
+            Map.Entry<BlockVector3, BaseBlock> entry = iterator.next();
             extent.setBlock(entry.getKey(), entry.getValue());
         }
+        iterator = null;
         return null;
     }
 

@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.InlineMe;
 import com.sk89q.worldedit.entity.BaseEntity;
 import com.sk89q.worldedit.entity.Entity;
+import com.sk89q.worldedit.entity.Player;
 import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extension.platform.Capability;
@@ -110,6 +111,9 @@ import com.sk89q.worldedit.regions.shape.ArbitraryBiomeShape;
 import com.sk89q.worldedit.regions.shape.ArbitraryShape;
 import com.sk89q.worldedit.regions.shape.RegionShape;
 import com.sk89q.worldedit.regions.shape.WorldEditExpressionEnvironment;
+import com.sk89q.worldedit.session.job.EditJobQueue;
+import com.sk89q.worldedit.session.preview.EditPreview;
+import com.sk89q.worldedit.session.preview.PreviewCaptureExtent;
 import com.sk89q.worldedit.util.Countable;
 import com.sk89q.worldedit.util.Direction;
 import com.sk89q.worldedit.util.SideEffectSet;
@@ -218,6 +222,7 @@ public class EditSession implements Extent, AutoCloseable {
     private final BlockChangeLimiter changeLimiter;
     private @Nullable ChangeSetExtent changeSetExtent;
     private final List<WatchdogTickingExtent> watchdogExtents = new ArrayList<>(2);
+    private final @Nullable EditPreview preview;
 
     private final Extent bypassReorderHistory;
     private final Extent bypassHistory;
@@ -245,6 +250,25 @@ public class EditSession implements Extent, AutoCloseable {
     EditSession(EventBus eventBus, World world, int maxBlocks, @Nullable BlockBag blockBag,
                 @Nullable Actor actor,
                 boolean tracing) {
+        this(eventBus, world, maxBlocks, blockBag, actor, tracing, null);
+    }
+
+    /**
+     * Construct the object with a maximum number of blocks and a block bag.
+     *
+     * @param eventBus the event bus
+     * @param world the world
+     * @param maxBlocks the maximum number of blocks that can be changed, or -1 to use no limit
+     * @param blockBag an optional {@link BlockBag} to use, otherwise null
+     * @param actor the actor that owns the session
+     * @param tracing if tracing is enabled. An actor is required if this is {@code true}
+     * @param preview if not null, block changes are captured into this preview instead of the world
+     */
+    // Suppressing AssignmentExpression: This provides clarity in the way that we use it.
+    @SuppressWarnings("AssignmentExpression")
+    EditSession(EventBus eventBus, World world, int maxBlocks, @Nullable BlockBag blockBag,
+                @Nullable Actor actor,
+                boolean tracing, @Nullable EditPreview preview) {
         checkNotNull(eventBus);
         checkArgument(maxBlocks >= -1, "maxBlocks >= -1 required");
 
@@ -257,6 +281,7 @@ public class EditSession implements Extent, AutoCloseable {
 
         this.world = world;
         this.actor = actor;
+        this.preview = world == null ? null : preview;
 
         if (world != null) {
             EditSessionEvent event = new EditSessionEvent(world, actor, maxBlocks, null);
@@ -266,6 +291,10 @@ public class EditSession implements Extent, AutoCloseable {
 
             // These extents are ALWAYS used
             extent = traceIfNeeded(sideEffectExtent = new SideEffectExtent(world));
+            if (this.preview != null) {
+                // Capture changes instead of writing them to the world
+                extent = traceIfNeeded(new PreviewCaptureExtent(extent, this.preview));
+            }
             if (watchdog != null) {
                 // Reset watchdog before world placement
                 WatchdogTickingExtent watchdogExtent = new WatchdogTickingExtent(extent, watchdog);
@@ -961,6 +990,53 @@ public class EditSession implements Extent, AutoCloseable {
     public void close() {
         internalFlushSession();
         dumpTracingInformation();
+        if (preview != null && actor instanceof Player player) {
+            showPreview(player);
+        }
+    }
+
+    /**
+     * Close the session like {@link #close()}, but if the edit is large and the platform supports it,
+     * apply the changes to the world over several server ticks instead of all at once.
+     *
+     * <p>Only call this when nothing else will read from the world expecting this edit to be
+     * complete, e.g. at the very end of a command. Queued edits in a world are finished before a new
+     * edit session for that world is created.</p>
+     */
+    public void closeDeferrable() {
+        EditJobQueue queue = WorldEdit.getInstance().getEditJobQueue();
+        if (preview == null && tracingExtents == null && world != null
+            && blockBagExtent.getBlockBag() == null && queue.shouldDefer(this)) {
+            Operation remaining = commit();
+            if (remaining != null) {
+                queue.submit(this, remaining, actor);
+                return;
+            }
+        }
+        close();
+    }
+
+    /**
+     * Check whether this session captures its changes into a preview instead of the world.
+     *
+     * @return true if this is a preview session
+     */
+    public boolean isPreview() {
+        return preview != null;
+    }
+
+    private void showPreview(Player player) {
+        int maxShown = WorldEdit.getInstance().getConfiguration().maxPreviewBlocks;
+        int skipped = preview.show(player, maxShown);
+        player.printInfo(TextComponent.of(String.format(
+            "Previewing %,d block changes (only you can see them). Use //preview apply to build them, "
+                + "or //preview cancel to discard.", preview.size()
+        )));
+        if (skipped > 0) {
+            player.printError(TextComponent.of(String.format(
+                "%,d changes are not shown because the preview is larger than %,d blocks.", skipped, maxShown
+            )));
+        }
     }
 
     private void dumpTracingInformation() {

@@ -19,7 +19,8 @@
 
 package com.sk89q.worldedit.extension.factory.parser.mask;
 
-import com.google.common.base.Splitter;
+import com.google.common.base.CharMatcher;
+import com.sk89q.util.StringUtil;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.input.InputParseException;
 import com.sk89q.worldedit.extension.input.ParserContext;
@@ -27,6 +28,7 @@ import com.sk89q.worldedit.function.mask.ExistingBlockMask;
 import com.sk89q.worldedit.function.mask.Mask;
 import com.sk89q.worldedit.function.mask.OffsetsMask;
 import com.sk89q.worldedit.internal.registry.InputParser;
+import com.sk89q.worldedit.util.formatting.text.TextComponent;
 
 import java.util.List;
 import java.util.Locale;
@@ -56,7 +58,8 @@ public class AdjacentMaskParser extends InputParser<Mask> {
     @Override
     public Mask parseFromInput(String input, ParserContext context) throws InputParseException {
         String lower = input.toLowerCase(Locale.ROOT);
-        if (!lower.startsWith("#adjacent") && !lower.startsWith("#near")) {
+        if (!lower.equals("#adjacent") && !lower.equals("#near")
+            && !lower.startsWith("#adjacent[") && !lower.startsWith("#near[")) {
             return null;
         }
 
@@ -65,37 +68,38 @@ public class AdjacentMaskParser extends InputParser<Mask> {
         }
 
         int open = input.indexOf('[');
-        int close = input.lastIndexOf(']');
-        if (open < 0 || close <= open) {
-            return OffsetsMask.adjacent(new ExistingBlockMask(context.requireExtent()));
+        int close = open < 0 ? -1 : StringUtil.findMatchingCloseBracket(input, open);
+        if (open < 0 || close != input.length() - 1) {
+            throw new InputParseException(TextComponent.of(
+                "Invalid adjacent mask, expected #adjacent[mask], #adjacent[count,mask] or #adjacent[min,max,mask]: " + input));
         }
 
         String argsStr = input.substring(open + 1, close).trim();
-        List<String> parts = Splitter.on(',').trimResults().splitToList(argsStr);
+        List<String> parts = StringUtil.splitOutsideBrackets(argsStr, CharMatcher.is(','));
 
         int minMatches = 1;
         int maxMatches = Integer.MAX_VALUE;
         String maskStr;
 
-        if (parts.size() == 1) {
-            maskStr = parts.get(0);
-        } else if (parts.size() == 2) {
-            try {
-                int count = Integer.parseInt(parts.get(0));
-                minMatches = count;
-                maxMatches = count;
-            } catch (NumberFormatException expected) {
-                // If first arg isn't a number, treat entire string as mask
+        try {
+            if (parts.size() == 1) {
+                maskStr = parts.get(0).trim();
+            } else if (parts.size() == 2) {
+                minMatches = Integer.parseInt(parts.get(0).trim());
+                maxMatches = minMatches;
+                maskStr = parts.get(1).trim();
+            } else if (parts.size() == 3) {
+                minMatches = Integer.parseInt(parts.get(0).trim());
+                maxMatches = Integer.parseInt(parts.get(1).trim());
+                maskStr = parts.get(2).trim();
+            } else {
+                throw new InputParseException(TextComponent.of("Too many arguments for adjacent mask: " + input));
             }
-            maskStr = parts.get(1);
-        } else {
-            try {
-                minMatches = Integer.parseInt(parts.get(0));
-                maxMatches = Integer.parseInt(parts.get(1));
-            } catch (NumberFormatException expected) {
-                // Ignore parse failure
-            }
-            maskStr = parts.get(2);
+        } catch (NumberFormatException e) {
+            throw new InputParseException(TextComponent.of("Invalid neighbor count in adjacent mask: " + input), e);
+        }
+        if (minMatches < 0 || maxMatches < minMatches || minMatches > 6) {
+            throw new InputParseException(TextComponent.of("Adjacent neighbor counts must satisfy 0 <= min <= max, min <= 6: " + input));
         }
 
         Mask subMask = worldEdit.getMaskFactory().parseFromInput(maskStr, context);

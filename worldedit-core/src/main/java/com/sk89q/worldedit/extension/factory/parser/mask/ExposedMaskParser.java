@@ -29,6 +29,7 @@ import com.sk89q.worldedit.function.mask.Masks;
 import com.sk89q.worldedit.function.mask.OffsetsMask;
 import com.sk89q.worldedit.internal.registry.InputParser;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.util.formatting.text.TextComponent;
 
 import java.util.Locale;
 import java.util.stream.Stream;
@@ -72,8 +73,9 @@ public class ExposedMaskParser extends InputParser<Mask> {
 
         int open = input.indexOf('[');
         int close = input.lastIndexOf(']');
-        if (open < 0 || close <= open) {
-            return OffsetsMask.builder(airMask).excludeSelf(true).build();
+        if (open < 0 || close != input.length() - 1) {
+            // Not something we understand, e.g. "#exposedfoo"; let other parsers have a go
+            return null;
         }
 
         String dirStr = input.substring(open + 1, close).trim().toLowerCase(Locale.ROOT);
@@ -93,7 +95,8 @@ public class ExposedMaskParser extends InputParser<Mask> {
                 ))
                 .excludeSelf(true)
                 .build();
-            default -> OffsetsMask.builder(airMask).excludeSelf(true).build();
+            default -> throw new InputParseException(TextComponent.of(
+                "Unknown direction for exposed mask (expected up, down, north, south, east, west or horizontal): " + dirStr));
         };
     }
 }

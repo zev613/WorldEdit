@@ -119,6 +119,11 @@ public class PropertiesConfiguration extends LocalConfiguration {
         scriptTimeout = getInt("scripting-timeout", scriptTimeout);
         calculationTimeout = getInt("calculation-timeout", calculationTimeout);
         maxCalculationTimeout = getInt("max-calculation-timeout", maxCalculationTimeout);
+        timeSlicedEdits = getBool("time-sliced-edits", timeSlicedEdits);
+        timeSlicedEditThreshold = getInt("time-sliced-edit-threshold", timeSlicedEditThreshold);
+        timeSlicedEditTickBudget = getInt("time-sliced-edit-tick-budget-ms", timeSlicedEditTickBudget);
+        maxPreviewBlocks = getInt("max-preview-blocks", maxPreviewBlocks);
+        persistentHistorySize = Math.max(0, getInt("persistent-history-size", persistentHistorySize));
         saveDir = getString("schematic-save-dir", saveDir);
         scriptsDir = getString("craftscript-dir", scriptsDir);
         butcherDefaultRadius = getInt("butcher-default-radius", butcherDefaultRadius);

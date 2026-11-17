@@ -120,6 +120,7 @@ public class NeoForgeWorldEdit extends CoreMcMod {
         @SubscribeEvent
         public void onServerTick(ServerTickEvent.Post event) {
             ThreadSafeCache.getInstance().onEndTick(ServerLifecycleHooks.getCurrentServer());
+            mod.serverTick();
         }
 
         @SubscribeEvent

@@ -19,7 +19,8 @@
 
 package com.sk89q.worldedit.extension.factory.parser.pattern;
 
-import com.google.common.base.Splitter;
+import com.google.common.base.CharMatcher;
+import com.sk89q.util.StringUtil;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.input.InputParseException;
 import com.sk89q.worldedit.extension.input.ParserContext;
@@ -61,30 +62,28 @@ public class VoronoiPatternParser extends InputParser<Pattern> {
             return null;
         }
 
-        int firstOpen = input.indexOf('[');
-        int firstClose = input.indexOf(']', firstOpen);
-        if (firstClose < 0) {
-            return null;
+        List<String> groups = GradientPatternParser.bracketGroups(input, input.indexOf('['));
+        if (groups == null || groups.isEmpty() || groups.size() > 2) {
+            throw new InputParseException(TextComponent.of(
+                "Invalid voronoi pattern, expected #voronoi[scale][palette] or #voronoi[palette]: " + input));
         }
 
         double scale = 5.0;
-        String firstBracket = input.substring(firstOpen + 1, firstClose).trim();
         String paletteString;
-
-        int secondOpen = input.indexOf('[', firstClose);
-        if (secondOpen >= 0 && input.endsWith("]")) {
-            paletteString = input.substring(secondOpen + 1, input.length() - 1).trim();
+        if (groups.size() == 2) {
+            paletteString = groups.get(1).trim();
             try {
-                scale = Double.parseDouble(firstBracket);
-            } catch (NumberFormatException expected) {
-                // Keep default scale
+                scale = Double.parseDouble(groups.get(0).trim());
+            } catch (NumberFormatException e) {
+                throw new InputParseException(TextComponent.of("Invalid voronoi cell scale: " + groups.get(0)), e);
             }
         } else {
-            paletteString = firstBracket;
+            paletteString = groups.get(0).trim();
         }
 
         List<Pattern> patterns = new ArrayList<>();
-        for (String token : Splitter.on(',').trimResults().split(paletteString)) {
+        for (String token : StringUtil.splitOutsideBrackets(paletteString, CharMatcher.is(','))) {
+            token = token.trim();
             if (!token.isEmpty()) {
                 patterns.add(worldEdit.getPatternFactory().parseFromInput(token, context));
             }

@@ -49,6 +49,7 @@ import com.sk89q.worldedit.regions.selector.RegionSelectorType;
 import com.sk89q.worldedit.session.ClipboardHolder;
 import com.sk89q.worldedit.session.Placement;
 import com.sk89q.worldedit.session.PlacementType;
+import com.sk89q.worldedit.session.preview.EditPreview;
 import com.sk89q.worldedit.session.request.Request;
 import com.sk89q.worldedit.util.Countable;
 import com.sk89q.worldedit.util.SideEffectSet;
@@ -101,9 +102,13 @@ public class LocalSession {
     private transient Placement placement = new Placement(PlacementType.PLAYER, BlockVector3.ZERO);
     private final transient ArrayDeque<EditSession> history = new ArrayDeque<>();
     private transient int historyPointer = 0;
+    @Nullable
+    private transient com.sk89q.worldedit.session.HistoryListener historyListener;
     private transient ClipboardHolder clipboard;
     private final transient java.util.Map<String, ClipboardHolder> namedClipboards = new java.util.concurrent.ConcurrentHashMap<>();
     private transient boolean superPickaxe = false;
+    private transient boolean previewMode = false;
+    private transient @Nullable EditPreview preview;
     private transient BlockTool pickaxeMode = new SinglePickaxe();
     private final transient Map<ItemType, Tool> tools = new HashMap<>();
     private transient int maxBlocksChanged = -1;
@@ -221,6 +226,9 @@ public class LocalSession {
     public void clearHistory() {
         history.clear();
         historyPointer = 0;
+        if (historyListener != null) {
+            historyListener.onClear();
+        }
     }
 
     /**
@@ -232,8 +240,8 @@ public class LocalSession {
     public void remember(EditSession editSession) {
         checkNotNull(editSession);
 
-        // Don't store anything if no changes were made
-        if (editSession.size() == 0) {
+        // Don't store anything if no changes were made, or if they only went into a preview
+        if (editSession.size() == 0 || editSession.isPreview()) {
             return;
         }
 
@@ -246,6 +254,9 @@ public class LocalSession {
             history.removeFirst();
         }
         historyPointer = history.size();
+        if (historyListener != null) {
+            historyListener.onRemember(editSession, java.util.Collections.unmodifiableCollection(history));
+        }
     }
 
     /**
@@ -266,6 +277,9 @@ public class LocalSession {
                          .build()) {
                 prepareEditingExtents(newEditSession, actor);
                 editSession.undo(newEditSession);
+            }
+            if (historyListener != null) {
+                historyListener.onUndo(editSession);
             }
             return editSession;
         } else {
@@ -293,10 +307,47 @@ public class LocalSession {
                 editSession.redo(newEditSession);
             }
             ++historyPointer;
+            if (historyListener != null) {
+                historyListener.onRedo(editSession);
+            }
             return editSession;
         }
 
         return null;
+    }
+
+    /**
+     * Get an edit that the next undo(s) would revert, without undoing it.
+     *
+     * @param stepsBack 0 for the edit the next undo reverts, 1 for the one before, ...
+     * @return the edit, or {@code null} if there is none
+     */
+    @Nullable
+    public EditSession getUndoHistoryEntry(int stepsBack) {
+        int index = historyPointer - 1 - stepsBack;
+        if (stepsBack < 0 || index < 0 || index >= history.size()) {
+            return null;
+        }
+        return Iterables.get(history, index);
+    }
+
+    /**
+     * Get the listener notified of history changes (used for persistent history).
+     *
+     * @return the listener, or {@code null}
+     */
+    @Nullable
+    public com.sk89q.worldedit.session.HistoryListener getHistoryListener() {
+        return historyListener;
+    }
+
+    /**
+     * Set the listener notified of history changes.
+     *
+     * @param historyListener the listener, or {@code null}
+     */
+    public void setHistoryListener(@Nullable com.sk89q.worldedit.session.HistoryListener historyListener) {
+        this.historyListener = historyListener;
     }
 
     public boolean hasWorldOverride() {
@@ -468,6 +519,54 @@ public class LocalSession {
      */
     public void setClipboard(@Nullable ClipboardHolder clipboard) {
         this.clipboard = clipboard;
+    }
+
+    /**
+     * Check whether edits are captured into a preview instead of being applied to the world.
+     *
+     * @return true if preview mode is on
+     */
+    public boolean isPreviewMode() {
+        return previewMode;
+    }
+
+    /**
+     * Set whether edits made through {@link #createEditSession(Actor)} by a player are captured
+     * into a preview instead of being applied to the world.
+     *
+     * @param previewMode true to enable preview mode
+     */
+    public void setPreviewMode(boolean previewMode) {
+        this.previewMode = previewMode;
+    }
+
+    /**
+     * Get the current preview, if there is one.
+     *
+     * @return the preview, or null
+     */
+    public @Nullable EditPreview getPreview() {
+        return preview;
+    }
+
+    /**
+     * Get the preview for the given world, starting a new one if there is none or it is for another world.
+     *
+     * @param world the world
+     * @return the preview
+     */
+    public EditPreview getOrCreatePreview(World world) {
+        if (preview == null || !preview.getWorld().equals(world)) {
+            preview = new EditPreview(world);
+        }
+        return preview;
+    }
+
+    /**
+     * Forget the current preview. Callers should hide the ghost blocks from the player first.
+     */
+    public void clearPreview() {
+        preview = null;
     }
 
     /**
@@ -1190,6 +1289,9 @@ public class LocalSession {
             .tracing(isTracingActions());
         if (actor.isPlayer() && actor instanceof Player player) {
             builder.blockBag(getBlockBag(player));
+            if (previewMode && world != null) {
+                builder.preview(getOrCreatePreview(world));
+            }
         }
         EditSession editSession = builder.build();
         // Allow creating EditSessions outside a request if needed.

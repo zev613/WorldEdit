@@ -244,8 +244,20 @@ public abstract class CoreMcMod {
         WorldEdit.getInstance().getEventBus().post(new PlatformReadyEvent(platform));
     }
 
+    /**
+     * Called at the end of every server tick, on the server thread.
+     */
+    protected void serverTick() {
+        if (platform != null) {
+            // Apply large edits a slice at a time
+            WorldEdit.getInstance().getEditJobQueue().tick();
+        }
+    }
+
     protected void serverStopping() {
         WorldEdit worldEdit = WorldEdit.getInstance();
+        // Don't leave edits half-applied
+        worldEdit.getEditJobQueue().completeJobs(null);
         worldEdit.getSessionManager().unload();
         WorldEdit.getInstance().getEventBus().post(new PlatformUnreadyEvent(platform));
     }

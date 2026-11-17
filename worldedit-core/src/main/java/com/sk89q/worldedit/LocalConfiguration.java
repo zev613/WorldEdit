@@ -82,6 +82,18 @@ public abstract class LocalConfiguration {
     public int scriptTimeout = 3000;
     public int calculationTimeout = 100;
     public int maxCalculationTimeout = 300;
+    /** Spread large edits over several server ticks instead of applying them all at once. */
+    public boolean timeSlicedEdits = true;
+    /** Edits changing at least this many blocks are applied over several ticks. */
+    public int timeSlicedEditThreshold = 50_000;
+    /** Milliseconds per server tick that may be spent applying queued edits. */
+    public int timeSlicedEditTickBudget = 20;
+    /** Maximum number of preview blocks shown to a player at once. */
+    public int maxPreviewBlocks = 100_000;
+    /**
+     * Number of edits per player kept on disk so they can be undone after a restart. 0 disables.
+     */
+    public int persistentHistorySize = 15;
     public Set<String> allowedDataCycleBlocks = new HashSet<>();
     public String saveDir = "schematics";
     public String scriptsDir = "craftscripts";

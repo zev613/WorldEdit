@@ -28,11 +28,13 @@ import com.sk89q.worldedit.command.util.CommandPermissionsConditionGenerator;
 import com.sk89q.worldedit.entity.Player;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extent.inventory.BlockBag;
+import com.sk89q.worldedit.function.mask.Mask;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.formatting.text.TranslatableComponent;
 import org.enginehub.piston.annotation.Command;
 import org.enginehub.piston.annotation.CommandContainer;
 import org.enginehub.piston.annotation.param.Arg;
+import org.enginehub.piston.annotation.param.ArgFlag;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -57,14 +59,23 @@ public class HistoryCommands {
     @Command(
         name = "undo",
         aliases = { "/undo" },
-        desc = "Undoes the last action (from history)"
+        desc = "Undoes the last action (from history)",
+        descFooter =
+            """
+            With -m <mask>, only the block changes at positions matching the mask (evaluated against \
+            the current world) are reverted; those positions are then removed from the history entry, \
+            which stays in the history.
+            When nothing is left to undo in memory (e.g. after a restart), saved edits are undone from disk.
+            """
     )
     @CommandPermissions({"worldedit.history.undo", "worldedit.history.undo.self"})
     public void undo(Actor actor, LocalSession session,
                      @Arg(desc = "Number of undoes to perform", def = "1")
                          int times,
                      @Arg(name = "player", desc = "Undo this player's operations", def = "")
-                         String playerName) throws WorldEditException {
+                         String playerName,
+                     @ArgFlag(name = 'm', desc = "Only undo block changes at positions matching this mask")
+                         Mask mask) throws WorldEditException {
         times = Math.max(1, times);
         LocalSession undoSession = session;
         if (playerName != null) {
@@ -75,6 +86,10 @@ public class HistoryCommands {
                 return;
             }
         }
+        if (mask != null) {
+            HistoryPersistenceHelper.selectiveUndo(actor, undoSession, times, mask);
+            return;
+        }
         int timesUndone = 0;
         for (int i = 0; i < times; ++i) {
             BlockBag blockBag = actor instanceof Player player ? undoSession.getBlockBag(player) : null;
@@ -82,6 +97,8 @@ public class HistoryCommands {
             if (undone != null) {
                 timesUndone++;
                 worldEdit.flushBlockBag(actor, undone);
+            } else if (HistoryPersistenceHelper.undoFromDisk(actor, undoSession, blockBag)) {
+                timesUndone++;
             } else {
                 break;
             }
@@ -117,6 +134,14 @@ public class HistoryCommands {
         int timesRedone = 0;
         for (int i = 0; i < times; ++i) {
             BlockBag blockBag = actor instanceof Player player ? redoSession.getBlockBag(player) : null;
+            Boolean diskRedo = HistoryPersistenceHelper.redoFromDisk(actor, redoSession, blockBag);
+            if (diskRedo != null) {
+                if (!diskRedo) {
+                    break;
+                }
+                timesRedone++;
+                continue;
+            }
             EditSession redone = redoSession.redo(blockBag, actor);
             if (redone != null) {
                 timesRedone++;

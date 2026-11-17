@@ -19,7 +19,9 @@
 
 package com.sk89q.worldedit.extension.factory.parser.pattern;
 
+import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
+import com.sk89q.util.StringUtil;
 import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.WorldEdit;
@@ -35,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
+import javax.annotation.Nullable;
 
 /**
  * Parser for {@code #gradient[axis][palette]} or {@code #gradient[palette]}.
@@ -64,45 +67,43 @@ public class GradientPatternParser extends InputParser<Pattern> {
             return null;
         }
 
-        // Match #gradient[axis][palette] or #gradient[palette]
-        int firstOpen = input.indexOf('[');
-        int firstClose = input.indexOf(']', firstOpen);
-        if (firstClose < 0) {
-            return null;
+        // Match #gradient[axis(,min,max)][palette] or #gradient[palette]
+        List<String> groups = bracketGroups(input, input.indexOf('['));
+        if (groups == null || groups.isEmpty() || groups.size() > 2) {
+            throw new InputParseException(TextComponent.of(
+                "Invalid gradient pattern, expected #gradient[axis,min,max][palette] or #gradient[palette]: " + input));
         }
 
         char axis = 'y';
         double minCoord = 0;
         double maxCoord = 64;
         boolean hasExplicitBounds = false;
-
-        String firstBracket = input.substring(firstOpen + 1, firstClose).trim();
         String paletteString;
 
-        int secondOpen = input.indexOf('[', firstClose);
-        if (secondOpen >= 0 && input.endsWith("]")) {
-            // Format is #gradient[config][palette]
-            paletteString = input.substring(secondOpen + 1, input.length() - 1).trim();
+        if (groups.size() == 2) {
+            paletteString = groups.get(1).trim();
 
-            List<String> configParts = Splitter.on(',').trimResults().splitToList(firstBracket);
-            if (!configParts.isEmpty()) {
-                String firstPart = configParts.get(0);
-                if (firstPart.equalsIgnoreCase("x") || firstPart.equalsIgnoreCase("y") || firstPart.equalsIgnoreCase("z")) {
-                    axis = firstPart.charAt(0);
+            List<String> configParts = Splitter.on(',').trimResults().splitToList(groups.get(0));
+            String firstPart = configParts.get(0);
+            if (firstPart.equalsIgnoreCase("x") || firstPart.equalsIgnoreCase("y") || firstPart.equalsIgnoreCase("z")) {
+                axis = Character.toLowerCase(firstPart.charAt(0));
+            } else if (!firstPart.isEmpty()) {
+                throw new InputParseException(TextComponent.of("Invalid gradient axis (expected x, y or z): " + firstPart));
+            }
+            if (configParts.size() == 3) {
+                try {
+                    minCoord = Double.parseDouble(configParts.get(1));
+                    maxCoord = Double.parseDouble(configParts.get(2));
+                    hasExplicitBounds = true;
+                } catch (NumberFormatException e) {
+                    throw new InputParseException(TextComponent.of("Invalid gradient bounds: " + groups.get(0)), e);
                 }
-                if (configParts.size() >= 3) {
-                    try {
-                        minCoord = Double.parseDouble(configParts.get(1));
-                        maxCoord = Double.parseDouble(configParts.get(2));
-                        hasExplicitBounds = true;
-                    } catch (NumberFormatException expected) {
-                        // Keep default bounds if coordinates cannot be parsed
-                    }
-                }
+            } else if (configParts.size() != 1) {
+                throw new InputParseException(TextComponent.of(
+                    "Gradient settings must be [axis] or [axis,min,max]: " + groups.get(0)));
             }
         } else {
-            // Format is #gradient[palette]
-            paletteString = firstBracket;
+            paletteString = groups.get(0).trim();
         }
 
         if (!hasExplicitBounds) {
@@ -125,14 +126,15 @@ public class GradientPatternParser extends InputParser<Pattern> {
                             maxCoord = region.getMaximumPoint().y();
                         }
                     }
-                } catch (IncompleteRegionException expected) {
+                } catch (IncompleteRegionException _) {
                     // Region incomplete or not selected, fall back to default bounds
                 }
             }
         }
 
         List<Pattern> patterns = new ArrayList<>();
-        for (String token : Splitter.on(',').trimResults().split(paletteString)) {
+        for (String token : StringUtil.splitOutsideBrackets(paletteString, CharMatcher.is(','))) {
+            token = token.trim();
             if (!token.isEmpty()) {
                 patterns.add(worldEdit.getPatternFactory().parseFromInput(token, context));
             }
@@ -143,5 +145,29 @@ public class GradientPatternParser extends InputParser<Pattern> {
         }
 
         return new GradientPattern(axis, minCoord, maxCoord, patterns);
+    }
+
+    /**
+     * Splits input of the form {@code [a][b]...} starting at {@code from} into the contents of each
+     * top-level bracket group, respecting nested brackets (e.g. block states).
+     *
+     * @return the group contents, or {@code null} if the input is malformed
+     */
+    @Nullable
+    static List<String> bracketGroups(String input, int from) {
+        List<String> groups = new ArrayList<>();
+        int i = from;
+        while (i < input.length()) {
+            if (input.charAt(i) != '[') {
+                return null;
+            }
+            int close = StringUtil.findMatchingCloseBracket(input, i);
+            if (close < 0) {
+                return null;
+            }
+            groups.add(input.substring(i + 1, close));
+            i = close + 1;
+        }
+        return groups;
     }
 }

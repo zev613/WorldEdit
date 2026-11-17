@@ -47,6 +47,7 @@ import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.regions.selector.CuboidRegionSelector;
 import com.sk89q.worldedit.regions.selector.ExtendingCuboidRegionSelector;
 import com.sk89q.worldedit.session.ClipboardHolder;
+import com.sk89q.worldedit.session.NamedClipboardStore;
 import com.sk89q.worldedit.util.formatting.text.Component;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.formatting.text.TranslatableComponent;
@@ -178,7 +179,7 @@ public class ClipboardCommands {
                           String clipName) throws WorldEditException {
 
         ClipboardHolder holder = (clipName != null && !clipName.isEmpty())
-                ? session.getNamedClipboard(clipName)
+                ? NamedClipboardStore.getDefault().getNamedClipboard(session, actor, clipName)
                 : session.getClipboard();
         Clipboard clipboard = holder.getClipboard();
         Region region = clipboard.getRegion();
@@ -225,37 +226,22 @@ public class ClipboardCommands {
     @Command(
         name = "/clipboards",
         aliases = { "/clips" },
-        desc = "Manage named clipboards in the current session"
+        desc = "Manage named clipboards (kept in the session and saved to disk)",
+        descFooter =
+            """
+            save <name>: store the current clipboard under a name, in memory and on disk.
+            load <name>: make a named clipboard the active one (loaded from disk if needed).
+            delete <name>: forget a named clipboard and delete its saved file.
+            list: show named clipboards in memory and on disk.
+            """
     )
     @CommandPermissions("worldedit.clipboard.list")
     public void listClipboards(Actor actor, LocalSession session,
-                               @Arg(desc = "Action: list, save, or load", def = "list")
+                               @Arg(desc = "Action: list, save, load or delete", def = "list")
                                    String action,
                                @Arg(desc = "Name of the clipboard", def = "")
                                    String name) throws WorldEditException {
-        String act = action.toLowerCase(java.util.Locale.ROOT);
-        switch (act) {
-            case "save" -> {
-                checkCommandArgument(!name.isEmpty(), "Please specify a clipboard name to save to: //clipboards save <name>");
-                ClipboardHolder holder = session.getClipboard();
-                session.setNamedClipboard(name, holder);
-                actor.printInfo(TextComponent.of("Current clipboard saved as '" + name + "'."));
-            }
-            case "load" -> {
-                checkCommandArgument(!name.isEmpty(), "Please specify a clipboard name to load: //clipboards load <name>");
-                ClipboardHolder holder = session.getNamedClipboard(name);
-                session.setClipboard(holder);
-                actor.printInfo(TextComponent.of("Clipboard '" + name + "' loaded as active clipboard."));
-            }
-            default -> {
-                var map = session.getNamedClipboards();
-                if (map.isEmpty()) {
-                    actor.printInfo(TextComponent.of("No named clipboards saved in this session."));
-                } else {
-                    actor.printInfo(TextComponent.of("Saved clipboards (" + map.size() + "): " + String.join(", ", map.keySet())));
-                }
-            }
-        }
+        NamedClipboardsHelper.run(actor, session, action, name);
     }
 
     @Command(
