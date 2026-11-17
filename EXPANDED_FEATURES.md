@@ -33,6 +33,15 @@ Copy `worldedit-neoforge/build/libs/worldedit-neoforge-mc26.3-<version>-dist.jar
 NeoForge 26.3 install (the NeoForge version this was built against is `neoforge` in `gradle/libs.versions.toml`).
 Remove any other WorldEdit jar first. Use the `-dist` jar, not `-dist-slim` (an intermediate jar missing the embedded jar-in-jar dependencies).
 
+#### If the game crashes on start-up
+
+* `IllegalStateException: Missing uniform tex (should be COMBINED_IMAGE_SAMPLER)` coming from
+  `net.neoforged.fml.earlydisplay` is a bug in NeoForge's early loading screen, not in WorldEdit. `runClient` turns that
+  screen off for you (in `worldedit-neoforge/run/config/fml.toml`). In your normal game, set
+  `earlyWindowControl = false` in `.minecraft/config/fml.toml`, or use a newer NeoForge 26.3 build.
+* Gradle only prints `finished with non-zero exit value`. The real error is in `worldedit-neoforge/run/logs/latest.log`
+  (or `run/crash-reports/`), which is what to look at, or share.
+
 Other platforms work the same way, e.g. `./gradlew :worldedit-fabric:runClient` for Fabric.
 `./gradlew build` builds everything, with jars in `worldedit-<platform>/build/libs`.
 

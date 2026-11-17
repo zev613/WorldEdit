@@ -20,6 +20,8 @@ val nextMajorMinecraftVersion: String = minecraftVersion.split('.').let { (usele
 
 val apiClasspath = configurations.resolvable("apiClasspath") {
     extendsFrom(configurations.api.get())
+    // In dev runs the common CUI protocol comes from inside the (shadowed) NeoForge protocol jar, see below
+    exclude(group = libs.cuiProtocol.common.get().group, module = libs.cuiProtocol.common.get().name)
 }
 
 jarJar.disableDefaultSources()
@@ -53,7 +55,14 @@ dependencies {
     api(project(":worldedit-core-mc"))
 
     implementation(libs.neoforge)
-    implementation(libs.cuiProtocol.neoforge)
+    // Use the shadowed protocol jar (the one shipped in our jar-in-jar), which contains the common protocol
+    // classes. The "dev" variant doesn't, and the separate common jar would end up on the plain classpath in dev
+    // runs, where it can't see the game's classes and mod loading fails with a LinkageError.
+    implementation(libs.cuiProtocol.neoforge) {
+        attributes {
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class, Bundling.SHADOWED))
+        }
+    }
     jarJar(libs.cuiProtocol.neoforge) {
         attributes {
             attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class, Bundling.SHADOWED))
@@ -64,16 +73,65 @@ dependencies {
     "coreResourcesScope"(project(":worldedit-core-mc"))
 }
 
+// worldedit-core-mc uses Minecraft classes, so in dev runs it has to be loaded by the game's class loader as
+// part of the worldedit mod. If it is loaded from the plain classpath instead, mod loading fails with a
+// LinkageError (two different ServerPlayer classes).
+evaluationDependsOn(":worldedit-core-mc")
+val coreMcMain: SourceSet = project(":worldedit-core-mc").the<SourceSetContainer>()["main"]
+val coreMcOutputs = coreMcMain.output
+
+configurations.runtimeClasspath {
+    exclude(group = libs.cuiProtocol.common.get().group, module = libs.cuiProtocol.common.get().name)
+}
+
 runs {
     val runConfig = Action<Run> {
         workingDirectory(project.file("run").canonicalPath)
-        modSources(sourceSets["main"])
+        modSources {
+            add("worldedit", sourceSets["main"])
+            add("worldedit", coreMcMain)
+        }
         dependencies {
-            runtime(apiClasspath.get())
+            runtime(apiClasspath.get().filter { file ->
+                !file.absolutePath.contains("${File.separator}worldedit-core-mc${File.separator}")
+            })
         }
     }
     register("client").configure(runConfig)
     register("server").configure(runConfig)
+    configureEach {
+        if (name == "gameTestServer") {
+            runConfig.execute(this)
+        }
+    }
+}
+
+// NeoForge 26.3.0.83's early loading screen can crash the client on start-up with
+// "IllegalStateException: Missing uniform tex (should be COMBINED_IMAGE_SAMPLER)", so dev runs turn it off
+// (the game's own loading screen still shows). Pass -PearlyLoadingScreen=true to keep it.
+val configureEarlyLoadingScreen by tasks.registering {
+    description = "Sets earlyWindowControl in the dev run's fml.toml"
+    val fmlConfig = project.file("run/config/fml.toml")
+    val enabled = providers.gradleProperty("earlyLoadingScreen").map { it.toBoolean() }.orElse(false)
+    inputs.property("enabled", enabled)
+    outputs.upToDateWhen { false }
+    doLast {
+        val line = "earlyWindowControl = ${enabled.get()}"
+        val existing = if (fmlConfig.exists()) fmlConfig.readText() else ""
+        val setting = Regex("(?m)^\\s*earlyWindowControl\\s*=.*$")
+        val updated = if (setting.containsMatchIn(existing)) {
+            existing.replace(setting, line)
+        } else {
+            existing + (if (existing.isEmpty() || existing.endsWith("\n")) "" else "\n") + line + "\n"
+        }
+        if (updated != existing) {
+            fmlConfig.parentFile.mkdirs()
+            fmlConfig.writeText(updated)
+        }
+    }
+}
+tasks.matching { it.name == "runClient" }.configureEach {
+    dependsOn(configureEarlyLoadingScreen)
 }
 
 configure<BasePluginExtension> {
