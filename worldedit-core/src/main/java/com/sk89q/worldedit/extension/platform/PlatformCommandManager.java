@@ -43,6 +43,8 @@ import com.sk89q.worldedit.command.ExpandCommands;
 import com.sk89q.worldedit.command.GeneralCommands;
 import com.sk89q.worldedit.command.GenerationCommands;
 import com.sk89q.worldedit.command.GenerationCommandsRegistration;
+import com.sk89q.worldedit.command.HeightmapCommands;
+import com.sk89q.worldedit.command.HeightmapCommandsRegistration;
 import com.sk89q.worldedit.command.HistoryCommands;
 import com.sk89q.worldedit.command.HistoryCommandsRegistration;
 import com.sk89q.worldedit.command.NavigationCommands;
@@ -64,6 +66,8 @@ import com.sk89q.worldedit.command.SnapshotUtilCommands;
 import com.sk89q.worldedit.command.SnapshotUtilCommandsRegistration;
 import com.sk89q.worldedit.command.SuperPickaxeCommands;
 import com.sk89q.worldedit.command.SuperPickaxeCommandsRegistration;
+import com.sk89q.worldedit.command.TerrainPaintCommands;
+import com.sk89q.worldedit.command.TerrainPaintCommandsRegistration;
 import com.sk89q.worldedit.command.ToolCommands;
 import com.sk89q.worldedit.command.ToolUtilCommands;
 import com.sk89q.worldedit.command.ToolUtilCommandsRegistration;
@@ -391,6 +395,13 @@ public final class PlatformCommandManager {
             GenerationCommandsRegistration.builder(),
             new GenerationCommands(worldEdit)
         );
+        registerSubCommands(
+            "/heightmap",
+            ImmutableList.of("/hmap"),
+            "Heightmap image import/export commands",
+            HeightmapCommandsRegistration.builder(),
+            new HeightmapCommands(worldEdit)
+        );
         this.registration.register(
             commandManager,
             HistoryCommandsRegistration.builder(),
@@ -431,6 +442,11 @@ public final class PlatformCommandManager {
             commandManager,
             EditJobCommandsRegistration.builder(),
             new EditJobCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            TerrainPaintCommandsRegistration.builder(),
+            new TerrainPaintCommands()
         );
         ToolCommands.register(registration, commandManager, commandManagerService, worldEdit);
         this.registration.register(
