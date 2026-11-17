@@ -84,6 +84,15 @@ builds terrain from a PNG stretched to fit the selection: black is the bottom of
 blocks up (default: the top of the selection). `-t` sets the surface block, and `-k` keeps what's above the new surface
 instead of clearing it. Files go in the `heightmaps` folder of WorldEdit's config directory.
 
+## Landscaping
+
+| Command | What it does |
+|---|---|
+| `//path <pattern> [width] [maxSlope] [-s stairs]` (alias `//road`) | Road that follows the terrain between your selection points (pos1 → pos2, or through the points of a polygon/convex selection). It finds a gentle route, grades it so each step changes by at most one block, tunnels through hills (3 blocks of headroom), and puts pillars under bridges. `-s` puts stairs on the steps. Width defaults to 3; use 2 or more. |
+| `//river [width] [depth] [-l maxLength] [-b bed]` | Carves a river downhill from your position until it reaches water, `-l` blocks (default 256), or a dip, where it makes a pond. The water never flows uphill, and low banks get levees. The bed defaults to sand. |
+| `//scatter <count> [minSpacing] [-k name] [-o yOffset] [-r seed] [-n] [-a]` | Places `count` randomly rotated copies of your clipboard (or named clipboard `-k`), spread out across the surface of the selection, e.g. rocks, ruins or bushes. `-n`: no rotation, `-a`: skip air, `-r`: repeatable result. The selection must reach down to the ground. |
+| `//ptree <log> <leaves> [height] [branches] [leafRadius] [-l lean°] [-t 1\|2] [-r seed] [-d]` | A custom tree at your position with a leaning, curving trunk (`-t 2` for 2×2), branches ending in leaf clusters, and a crown. Leaves are made persistent unless you pass `-d`. |
+
 ## New commands
 
 | Command | What it does |
@@ -121,5 +130,6 @@ On servers with a permissions plugin, the new nodes are:
 `worldedit.region.erode`, `worldedit.region.weather`, `worldedit.region.autostairs`, `worldedit.region.roof`,
 `worldedit.region.insetfaces`, `worldedit.clipboard.list`, `worldedit.preview`, `worldedit.jobs`
 (plus `worldedit.jobs.others` to cancel/finish other players' jobs), `worldedit.region.texture`,
-`worldedit.heightmap.import`, `worldedit.heightmap.export`. `//measure` uses `worldedit.selection.size`.
+`worldedit.heightmap.import`, `worldedit.heightmap.export`, `worldedit.generation.path`, `worldedit.generation.river`,
+`worldedit.generation.scatter`, `worldedit.generation.ptree`. `//measure` uses `worldedit.selection.size`.
 In single-player, and for operators, everything is allowed.
