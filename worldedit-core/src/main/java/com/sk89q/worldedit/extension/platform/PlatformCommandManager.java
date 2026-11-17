@@ -43,6 +43,8 @@ import com.sk89q.worldedit.command.GenerationCommands;
 import com.sk89q.worldedit.command.GenerationCommandsRegistration;
 import com.sk89q.worldedit.command.HistoryCommands;
 import com.sk89q.worldedit.command.HistoryCommandsRegistration;
+import com.sk89q.worldedit.command.LandscapeCommands;
+import com.sk89q.worldedit.command.LandscapeCommandsRegistration;
 import com.sk89q.worldedit.command.NavigationCommands;
 import com.sk89q.worldedit.command.NavigationCommandsRegistration;
 import com.sk89q.worldedit.command.PaintBrushCommands;
@@ -391,6 +393,11 @@ public final class PlatformCommandManager {
             commandManager,
             HistoryCommandsRegistration.builder(),
             new HistoryCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            LandscapeCommandsRegistration.builder(),
+            new LandscapeCommands(worldEdit)
         );
         this.registration.register(
             commandManager,
