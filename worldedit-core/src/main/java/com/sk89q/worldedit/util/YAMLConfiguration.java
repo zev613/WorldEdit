@@ -115,6 +115,7 @@ public class YAMLConfiguration extends LocalConfiguration {
         allowSymlinks = config.getBoolean("files.allow-symbolic-links", false);
         LocalSession.MAX_HISTORY_SIZE = Math.max(0, config.getInt("history.size", 15));
         SessionManager.EXPIRATION_GRACE = config.getInt("history.expiration", 10) * 60 * 1000;
+        persistentHistorySize = Math.max(0, config.getInt("history.persistent-size", persistentHistorySize));
 
         showHelpInfo = config.getBoolean("show-help-on-first-use", true);
         serverSideCUI = config.getBoolean("server-side-cui", true);

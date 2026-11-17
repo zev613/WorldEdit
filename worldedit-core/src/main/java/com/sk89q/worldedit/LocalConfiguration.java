@@ -82,6 +82,10 @@ public abstract class LocalConfiguration {
     public int scriptTimeout = 3000;
     public int calculationTimeout = 100;
     public int maxCalculationTimeout = 300;
+    /**
+     * Number of edits per player kept on disk so they can be undone after a restart. 0 disables.
+     */
+    public int persistentHistorySize = 15;
     public Set<String> allowedDataCycleBlocks = new HashSet<>();
     public String saveDir = "schematics";
     public String scriptsDir = "craftscripts";

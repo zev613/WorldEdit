@@ -119,6 +119,7 @@ public class PropertiesConfiguration extends LocalConfiguration {
         scriptTimeout = getInt("scripting-timeout", scriptTimeout);
         calculationTimeout = getInt("calculation-timeout", calculationTimeout);
         maxCalculationTimeout = getInt("max-calculation-timeout", maxCalculationTimeout);
+        persistentHistorySize = Math.max(0, getInt("persistent-history-size", persistentHistorySize));
         saveDir = getString("schematic-save-dir", saveDir);
         scriptsDir = getString("craftscript-dir", scriptsDir);
         butcherDefaultRadius = getInt("butcher-default-radius", butcherDefaultRadius);

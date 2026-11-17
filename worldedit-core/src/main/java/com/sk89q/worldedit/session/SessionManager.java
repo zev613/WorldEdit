@@ -176,6 +176,10 @@ public class SessionManager {
             session.setConfiguration(config);
             session.setBlockChangeLimit(config.defaultChangeLimit);
             session.setTimeout(config.calculationTimeout);
+            if (config.persistentHistorySize > 0 && sessionKey.isPersistent()) {
+                session.setHistoryListener(com.sk89q.worldedit.history.persistent.PersistentHistory.forPlayer(
+                    sessionKey.getUniqueId(), config.persistentHistorySize));
+            }
             try {
                 String sessionItem = session.isWandItemDefault() ? null : session.getWandItem();
                 setDefaultWand(sessionItem, config.wandItem, session, new SelectionWand());
