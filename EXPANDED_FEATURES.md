@@ -102,6 +102,35 @@ instead of clearing it. Files go in the `heightmaps` folder of WorldEdit's confi
 | `//lightfill [minLight] [-b block] [-s spacing]` | Makes the selection mob-proof: adds light sources (invisible `light` blocks by default, or e.g. `-b torch`) until every spot a mob could spawn on has at least `minLight` block light (default 1). Lower `-s` spreads lights more densely. The lighting is an approximation of the game's. |
 | `//find <mask> [limit] [-r radius] [-c]` | Lists the nearest blocks matching the mask in the selection (or within `-r` blocks of you) plus the total. Click coordinates to set pos1, or `[tp]` to teleport. `-c` shows which chunks have the most matches. |
 
+## History, comparing and clipboards
+
+| Command | What it does |
+|---|---|
+| `//diff [-k name] [-s] [-v]` | Compares the world with your clipboard (or named clipboard), at the spot it was copied from: how many blocks were changed, removed or added, and the most common changes. `-s` selects the area that changed. `-v` highlights differences only you can see: red = removed, lime = added, yellow = changed. `//diff clear` removes the highlights. |
+| `//diff restore [-k name] [-m mask]` | Puts the clipboard's blocks back wherever they differ, e.g. to repair griefing from a saved copy. `-m` limits it to a mask. You can `//undo` it. |
+| `//undo -m <mask> [times]` | Undo only the parts of your last edit(s) that match a mask, e.g. `//undo -m #region` or `//undo -m water`. A later full `//undo` or `//redo` still behaves correctly. |
+| `//clipboards save\|load\|delete <name>`, `//clipboards list` | Named clipboards are now also saved to disk (`clipboards/<your uuid>/<name>.schem`), so they survive restarts. `//paste -k <name>` loads from disk if needed. Names: letters, digits, `_` and `-`, up to 32 characters. |
+
+**Undo history survives restarts:** your last 15 edits are saved to disk (`history/<your uuid>/`), so `//undo` and `//redo`
+keep working after a server restart or when you log back in. Edits are undone in the world they were made in, and
+biome changes are included but entities are not. Edits over 2 million blocks aren't saved, and `//undo` stops there.
+`//clearhistory` deletes the saved history too. Set `persistent-history-size` in `worldedit.properties` (0 turns it off).
+
+## Pruning unused chunks (offline)
+
+The command-line build of WorldEdit can shrink a world by deleting chunks players barely visited (like MCA Selector).
+Run it with the server **stopped**:
+
+```sh
+./gradlew :worldedit-cli:shadowJar
+java -jar worldedit-cli/build/libs/worldedit-cli-*-dist.jar prune path/to/world --min-inhabited 1200 --center 0,0 --radius 2000
+```
+
+By default it only reports what it *would* delete. Add `--apply --backup path/to/backup` to actually do it
+(or `--no-backup` if you already have a backup). Chunks within `--radius` blocks of `--center` are always kept, and so
+are chunks players have spent at least `--min-inhabited` ticks in (default 1200 = 1 minute). For the Nether or End, point it at
+`world/DIM-1` or `world/DIM1`.
+
 ## New commands
 
 | Command | What it does |
@@ -141,5 +170,5 @@ On servers with a permissions plugin, the new nodes are:
 (plus `worldedit.jobs.others` to cancel/finish other players' jobs), `worldedit.region.texture`,
 `worldedit.heightmap.import`, `worldedit.heightmap.export`, `worldedit.generation.path`, `worldedit.generation.river`,
 `worldedit.generation.scatter`, `worldedit.generation.ptree`, `worldedit.region.retheme`, `worldedit.symmetry`,
-`worldedit.region.lightfill`, `worldedit.find`. `//measure` uses `worldedit.selection.size`.
+`worldedit.region.lightfill`, `worldedit.find`, `worldedit.diff`, `worldedit.diff.restore`. `//measure` uses `worldedit.selection.size`.
 In single-player, and for operators, everything is allowed.
