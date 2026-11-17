@@ -37,6 +37,8 @@ import com.sk89q.worldedit.command.ChunkCommands;
 import com.sk89q.worldedit.command.ChunkCommandsRegistration;
 import com.sk89q.worldedit.command.ClipboardCommands;
 import com.sk89q.worldedit.command.ClipboardCommandsRegistration;
+import com.sk89q.worldedit.command.EditJobCommands;
+import com.sk89q.worldedit.command.EditJobCommandsRegistration;
 import com.sk89q.worldedit.command.ExpandCommands;
 import com.sk89q.worldedit.command.GeneralCommands;
 import com.sk89q.worldedit.command.GenerationCommands;
@@ -46,6 +48,8 @@ import com.sk89q.worldedit.command.HistoryCommandsRegistration;
 import com.sk89q.worldedit.command.NavigationCommands;
 import com.sk89q.worldedit.command.NavigationCommandsRegistration;
 import com.sk89q.worldedit.command.PaintBrushCommands;
+import com.sk89q.worldedit.command.PreviewCommands;
+import com.sk89q.worldedit.command.PreviewCommandsRegistration;
 import com.sk89q.worldedit.command.RegionCommands;
 import com.sk89q.worldedit.command.RegionCommandsRegistration;
 import com.sk89q.worldedit.command.SchematicCommands;
@@ -418,6 +422,16 @@ public final class PlatformCommandManager {
             SnapshotUtilCommandsRegistration.builder(),
             new SnapshotUtilCommands(worldEdit)
         );
+        this.registration.register(
+            commandManager,
+            PreviewCommandsRegistration.builder(),
+            new PreviewCommands(worldEdit)
+        );
+        this.registration.register(
+            commandManager,
+            EditJobCommandsRegistration.builder(),
+            new EditJobCommands(worldEdit)
+        );
         ToolCommands.register(registration, commandManager, commandManagerService, worldEdit);
         this.registration.register(
             commandManager,
@@ -535,7 +549,8 @@ public final class PlatformCommandManager {
                     if (editSessionOpt.isPresent()) {
                         EditSession editSession = editSessionOpt.get();
                         session.remember(editSession);
-                        editSession.close();
+                        // Large edits may be applied over several ticks; nothing reads the world after this
+                        editSession.closeDeferrable();
 
                         if (config.profile) {
                             long time = System.currentTimeMillis() - start;

@@ -22,6 +22,7 @@ package com.sk89q.worldedit;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extent.inventory.BlockBag;
 import com.sk89q.worldedit.internal.util.ErrorReporting;
+import com.sk89q.worldedit.session.preview.EditPreview;
 import com.sk89q.worldedit.util.eventbus.EventBus;
 import com.sk89q.worldedit.world.World;
 
@@ -61,8 +62,8 @@ class TracedEditSession extends EditSession {
 
     TracedEditSession(EventBus eventBus, @Nullable World world, int maxBlocks, @Nullable BlockBag blockBag,
                       @Nullable Actor actor,
-                      boolean tracing) {
-        super(eventBus, world, maxBlocks, blockBag, actor, tracing);
+                      boolean tracing, @Nullable EditPreview preview) {
+        super(eventBus, world, maxBlocks, blockBag, actor, tracing, preview);
         this.record = new TraceRecord(actor);
         this.cleanable = cleaner.register(this, record);
     }

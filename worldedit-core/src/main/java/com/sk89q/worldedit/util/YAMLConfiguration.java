@@ -110,6 +110,11 @@ public class YAMLConfiguration extends LocalConfiguration {
         calculationTimeout = config.getInt("calculation.timeout", calculationTimeout);
         maxCalculationTimeout = config.getInt("calculation.max-timeout", maxCalculationTimeout);
 
+        timeSlicedEdits = config.getBoolean("time-sliced-edits.enabled", timeSlicedEdits);
+        timeSlicedEditThreshold = config.getInt("time-sliced-edits.threshold", timeSlicedEditThreshold);
+        timeSlicedEditTickBudget = config.getInt("time-sliced-edits.tick-budget-ms", timeSlicedEditTickBudget);
+        maxPreviewBlocks = config.getInt("preview.max-blocks", maxPreviewBlocks);
+
         saveDir = config.getString("saving.dir", saveDir);
 
         allowSymlinks = config.getBoolean("files.allow-symbolic-links", false);

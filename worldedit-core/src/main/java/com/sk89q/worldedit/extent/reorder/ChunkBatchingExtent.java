@@ -32,6 +32,7 @@ import com.sk89q.worldedit.world.block.BlockStateHolder;
 
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * A special extent that batches changes into Minecraft chunks. This helps
@@ -40,6 +41,11 @@ import java.util.List;
  * blocks.
  */
 public class ChunkBatchingExtent extends AbstractBufferingExtent {
+
+    /**
+     * How often (in blocks) a resumable commit checks whether it may continue. Must be 2^n - 1.
+     */
+    private static final int CONTINUE_CHECK_MASK = 255;
 
     private final BlockMap<BaseBlock> blockMap = BlockMap.createForBaseBlock();
     private boolean enabled;
@@ -89,16 +95,26 @@ public class ChunkBatchingExtent extends AbstractBufferingExtent {
             return null;
         }
         return new Operation() {
+            private @Nullable List<BlockVector3> blockVectors;
+            private int index;
 
             @Override
             public Operation resume(RunContext run) throws WorldEditException {
-                List<BlockVector3> blockVectors = new ArrayList<>(blockMap.keySet());
-                RegionOptimizedVectorSorter.sort(blockVectors);
-                for (BlockVector3 position : blockVectors) {
-                    BaseBlock block = blockMap.get(position);
-                    getExtent().setBlock(position, block);
+                if (blockVectors == null) {
+                    blockVectors = new ArrayList<>(blockMap.keySet());
+                    RegionOptimizedVectorSorter.sort(blockVectors);
+                }
+                // Resumable, so that large edits can be spread over several ticks.
+                // shouldContinue() is only checked every so often since it may read the clock.
+                while (index < blockVectors.size()) {
+                    if ((index & CONTINUE_CHECK_MASK) == 0 && index != 0 && !run.shouldContinue()) {
+                        return this;
+                    }
+                    BlockVector3 position = blockVectors.get(index++);
+                    getExtent().setBlock(position, blockMap.get(position));
                 }
                 blockMap.clear();
+                blockVectors = null;
                 return null;
             }
 

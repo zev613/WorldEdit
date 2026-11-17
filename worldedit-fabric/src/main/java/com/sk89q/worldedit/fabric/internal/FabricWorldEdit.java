@@ -79,7 +79,10 @@ public class FabricWorldEdit extends CoreMcMod implements ModInitializer {
 
         CUIPacketHandler.instance().registerServerboundHandler(this::onCuiPacket);
 
-        ServerTickEvents.END_SERVER_TICK.register(server -> ThreadSafeCache.getInstance().onEndTick(server));
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            ThreadSafeCache.getInstance().onEndTick(server);
+            serverTick();
+        });
         CommandRegistrationCallback.EVENT.register((dispatcher, _, _) -> registerCommands(dispatcher));
         ServerLifecycleEvents.SERVER_STARTING.register(_ -> serverAboutToStart());
         ServerLifecycleEvents.SERVER_STARTED.register(this::serverStarted);

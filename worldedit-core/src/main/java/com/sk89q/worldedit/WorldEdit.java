@@ -53,6 +53,7 @@ import com.sk89q.worldedit.scripting.CraftScriptContext;
 import com.sk89q.worldedit.scripting.CraftScriptEngine;
 import com.sk89q.worldedit.scripting.RhinoCraftScriptEngine;
 import com.sk89q.worldedit.session.SessionManager;
+import com.sk89q.worldedit.session.job.EditJobQueue;
 import com.sk89q.worldedit.util.Direction;
 import com.sk89q.worldedit.util.Location;
 import com.sk89q.worldedit.util.asset.AssetLoaders;
@@ -124,6 +125,7 @@ public final class WorldEdit {
     private final Supervisor supervisor = new SimpleSupervisor();
     private final AssetLoaders assetLoaders = new AssetLoaders(this);
     private final SchematicsManager schematicsManager = new SchematicsManager(this);
+    private final EditJobQueue editJobQueue = new EditJobQueue(this);
 
     private final BlockFactory blockFactory = new BlockFactory(this);
     private final ItemFactory itemFactory = new ItemFactory(this);
@@ -238,6 +240,15 @@ public final class WorldEdit {
      */
     public SessionManager getSessionManager() {
         return sessions;
+    }
+
+    /**
+     * Get the queue of large edits that are being applied over several server ticks.
+     *
+     * @return the edit job queue
+     */
+    public EditJobQueue getEditJobQueue() {
+        return editJobQueue;
     }
 
     /**

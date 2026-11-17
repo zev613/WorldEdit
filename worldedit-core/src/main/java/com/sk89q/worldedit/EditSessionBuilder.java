@@ -24,6 +24,7 @@ import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extension.platform.Locatable;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.extent.inventory.BlockBag;
+import com.sk89q.worldedit.session.preview.EditPreview;
 import com.sk89q.worldedit.util.eventbus.EventBus;
 import com.sk89q.worldedit.world.World;
 
@@ -40,6 +41,7 @@ public final class EditSessionBuilder {
     private @Nullable Actor actor;
     private @Nullable BlockBag blockBag;
     private boolean tracing;
+    private @Nullable EditPreview preview;
 
     EditSessionBuilder(EventBus eventBus) {
         this.eventBus = eventBus;
@@ -137,9 +139,28 @@ public final class EditSessionBuilder {
      * @return the new EditSession
      */
     public EditSession build() {
-        if (WorldEdit.getInstance().getConfiguration().traceUnflushedSessions) {
-            return new TracedEditSession(eventBus, world, maxBlocks, blockBag, actor, tracing);
+        if (world != null) {
+            // Finish edits that are still being applied over several ticks, so this session sees them
+            WorldEdit.getInstance().getEditJobQueue().completeJobs(world);
         }
-        return new EditSession(eventBus, world, maxBlocks, blockBag, actor, tracing);
+        if (WorldEdit.getInstance().getConfiguration().traceUnflushedSessions) {
+            return new TracedEditSession(eventBus, world, maxBlocks, blockBag, actor, tracing, preview);
+        }
+        return new EditSession(eventBus, world, maxBlocks, blockBag, actor, tracing, preview);
+    }
+
+    /**
+     * Capture the session's block changes into a preview instead of writing them to the world.
+     *
+     * @param preview the preview, or null to edit the world as normal
+     * @return this builder
+     */
+    public EditSessionBuilder preview(@Nullable EditPreview preview) {
+        this.preview = preview;
+        return this;
+    }
+
+    public @Nullable EditPreview getPreview() {
+        return preview;
     }
 }
