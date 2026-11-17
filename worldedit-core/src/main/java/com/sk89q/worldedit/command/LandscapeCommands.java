@@ -461,7 +461,9 @@ public class LandscapeCommands {
                      @ArgFlag(name = 't', desc = "Trunk thickness (1 or 2)", def = "1")
                          int thickness,
                      @ArgFlag(name = 'r', desc = "Random seed", def = "")
-                         String seed) throws WorldEditException {
+                         String seed,
+                     @Switch(name = 'd', desc = "Let the leaves decay naturally (by default they are made persistent)")
+                         boolean decay) throws WorldEditException {
         checkCommandArgument(height >= 3 && height <= 256, "Height must be between 3 and 256");
         checkCommandArgument(branches >= 0 && branches <= 64, "Branches must be between 0 and 64");
         checkCommandArgument(leafRadius >= 1 && leafRadius <= 32, "Leaf radius must be between 1 and 32");
@@ -493,7 +495,12 @@ public class LandscapeCommands {
                 && !existing.getBlockType().id().endsWith("_leaves")) {
                 continue;
             }
-            if (editSession.setBlock(pos, leavesPattern)) {
+            BaseBlock leafBlock = leavesPattern.applyBlock(pos);
+            if (!decay) {
+                // Generated leaves can be far from a log, so stop them from decaying
+                leafBlock = withProperty(leafBlock, "persistent", "true");
+            }
+            if (editSession.setBlock(pos, leafBlock)) {
                 changed++;
             }
         }
